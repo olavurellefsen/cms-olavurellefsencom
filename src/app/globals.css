@@ -708,6 +708,18 @@ a {
   margin-top: 20px;
 }
 
+.article-hero {
+  max-width: 1060px;
+  margin: 72px auto 0;
+}
+
+.article-hero img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+}
+
 .article-layout {
   display: grid;
   grid-template-columns: 0.34fr minmax(0, 760px) 0.2fr;

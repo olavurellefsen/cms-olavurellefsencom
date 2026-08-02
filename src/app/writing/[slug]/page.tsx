@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
@@ -103,6 +104,17 @@ export default async function ArticlePage({ params }: Props) {
             <p className="article-updated">Updated {formatDate(article.updatedAt)}</p>
           ) : null}
         </header>
+        {article.heroImage && article.showHeroImage ? (
+          <figure className="article-hero">
+            <Image
+              src={article.heroImage.src}
+              alt={article.heroImage.alt}
+              width={2160}
+              height={2700}
+              priority
+            />
+          </figure>
+        ) : null}
         <div className="article-layout">
           <aside className="article-aside">
             <span>Field note</span>
