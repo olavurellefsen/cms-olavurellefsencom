@@ -80,6 +80,7 @@ export const articleContentSchema = z.object({
   topics: z.array(z.string()),
   canonicalUrl: z.url(),
   heroImage: imageSchema.optional(),
+  showHeroImage: z.boolean().optional(),
   bodyMarkdown: z.string().min(1),
 });
 

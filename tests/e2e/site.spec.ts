@@ -1,7 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const publicRoutes = ["/", "/writing", "/writing/why-i-am-writing-here", "/about"];
+const publicRoutes = [
+  "/",
+  "/writing",
+  "/writing/claude-codex-usable-collaboration",
+  "/writing/why-i-am-writing-here",
+  "/about",
+];
 
 for (const viewport of [
   { name: "desktop", width: 1440, height: 1000 },
@@ -41,6 +47,16 @@ test("article HTML exposes canonical, dates, body and Article JSON-LD", async ({
   await expect(page.getByRole("heading", { name: "The work between the work" })).toBeVisible();
   const jsonLd = await page.locator('script[type="application/ld+json"]').allTextContents();
   expect(jsonLd.some((value) => value.includes('"@type":"Article"'))).toBe(true);
+});
+
+test("Usable collaboration article renders its product hero", async ({ page }) => {
+  await page.goto("/writing/claude-codex-usable-collaboration");
+  await expect(
+    page.getByRole("img", {
+      name: "Usable native apps for iOS and Android showing an answer grounded in shared workspace fragments",
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Preparing a shared memory" })).toBeVisible();
 });
 
 test("machine-readable routes and CMS routing are healthy", async ({ request }) => {
