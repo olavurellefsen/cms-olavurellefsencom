@@ -32,4 +32,4 @@ npm run verify
 flyctl deploy
 ```
 
-The production candidate is served from `https://olavurellefsen-com.fly.dev`. The legacy Netlify site remains the recovery path until domain and CMS production smoke checks pass.
+Production is served from `https://www.olavurellefsen.com` on Fly.io. The apex permanently redirects to `www`; `https://olavurellefsen-com.fly.dev` remains the stable Fly hostname.

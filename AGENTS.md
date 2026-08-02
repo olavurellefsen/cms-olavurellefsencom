@@ -28,4 +28,5 @@ Run `npm run verify` before pushing. Verify fallback rendering with `CMS_CONTENT
 - Use Conventional Commit subjects for every commit and PR title.
 - Fly app: `olavurellefsen-com`, region `ams`.
 - Canonical hostname: `www.olavurellefsen.com`; apex permanently redirects to `www`.
-- Do not cut DNS away from the legacy Netlify deployment until the Fly candidate and authenticated CMS draft/publish/upload/rollback flows have passed.
+- Canonical Route 53 DNS points to Fly. The legacy Netlify deployment is not a required recovery target.
+- Temporary downtime is acceptable to the site owner; CMS rollback, image recovery, and runtime page creation are post-launch improvements rather than availability blockers.
