@@ -1,5 +1,6 @@
 import Script from "next/script";
 import { siteBinding } from "@/lib/cms/binding";
+import { CmsEditor } from "./cms-editor";
 
 export function CmsEmbed() {
   const cmsOrigin = (process.env.NEXT_PUBLIC_USABLE_CMS_ORIGIN || "https://cms.usable.dev").replace(
@@ -13,13 +14,16 @@ export function CmsEmbed() {
   if (!siteId || !integrationKey) return null;
 
   return (
-    <Script
-      id="usable-cms-embed"
-      src={`${cmsOrigin}/embed.js`}
-      strategy="afterInteractive"
-      data-cms-origin={cmsOrigin}
-      data-site={siteId}
-      data-token={integrationKey}
-    />
+    <>
+      <Script
+        id="usable-cms-broker"
+        src={`${cmsOrigin}/broker.js`}
+        strategy="afterInteractive"
+        data-cms-origin={cmsOrigin}
+        data-site={siteId}
+        data-token={integrationKey}
+      />
+      <CmsEditor />
+    </>
   );
 }
