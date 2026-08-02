@@ -1,0 +1,158 @@
+{
+  "global": {
+    "siteName": "Ólavur Ellefsen",
+    "siteDescription": "Founder notes on durable AI, useful software, institutions and the Faroe Islands.",
+    "canonicalUrl": "https://www.olavurellefsen.com",
+    "navigation": [
+      { "label": "Home", "href": "/" },
+      { "label": "Writing", "href": "/writing" },
+      { "label": "About", "href": "/about" }
+    ],
+    "author": {
+      "name": "Ólavur Ellefsen",
+      "email": "olavur@ellefsen.fo",
+      "location": "Tórshavn, Faroe Islands",
+      "portrait": {
+        "src": "/images/olavur-ellefsen.png",
+        "alt": "Portrait of Ólavur Ellefsen"
+      }
+    },
+    "socialLinks": [
+      { "label": "LinkedIn", "href": "https://www.linkedin.com/in/olavurellefsen/" },
+      { "label": "Usable", "href": "https://www.usable.dev/" },
+      { "label": "Email", "href": "mailto:olavur@ellefsen.fo" }
+    ],
+    "footer": "Built in the Faroe Islands. Edited with Usable CMS."
+  },
+  "pages": [
+    {
+      "id": "home",
+      "title": "Home",
+      "path": "/",
+      "content": {
+        "type": "home",
+        "eyebrow": "Tórshavn · 62° N",
+        "headline": "Ólavur Ellefsen",
+        "introduction": "I build technology companies, learning systems and institutions from the Faroe Islands. Right now, most of my attention is on giving people and AI agents a durable memory through Usable.",
+        "currentFocus": {
+          "label": "Current focus",
+          "title": "Making AI useful beyond the first prompt.",
+          "body": "Usable is a shared knowledge and memory layer for people, teams and AI agents. We are building it so good context survives across tools, sessions and organisations.",
+          "href": "https://www.usable.dev/",
+          "linkLabel": "Explore Usable"
+        },
+        "selectedWorkTitle": "Work with a long horizon",
+        "selectedWork": [
+          {
+            "name": "Usable",
+            "role": "CEO & Co-founder",
+            "description": "Durable organisational memory and shared context for people and AI agents.",
+            "href": "https://www.usable.dev/",
+            "accent": "coral"
+          },
+          {
+            "name": "University of the Faroe Islands",
+            "role": "Chairman of the Board",
+            "description": "Strengthening higher education, research and public service in a small knowledge society.",
+            "href": "https://www.setur.fo/en/the-university/board-of-directors/",
+            "accent": "blue"
+          },
+          {
+            "name": "Ocean Rainforest",
+            "role": "Co-founder & Chairman",
+            "description": "Building a regenerative seaweed industry in the open North Atlantic.",
+            "href": "https://www.oceanrainforest.com/our-board-gen",
+            "accent": "green"
+          },
+          {
+            "name": "Tøkni",
+            "role": "Founder",
+            "description": "Interactive software for exploring complex systems, energy scenarios and public choices.",
+            "href": "https://tokni.com/",
+            "accent": "yellow"
+          }
+        ],
+        "latestWritingTitle": "Notes from the work"
+      }
+    },
+    {
+      "id": "writing",
+      "title": "Writing",
+      "path": "/writing",
+      "content": {
+        "type": "writing",
+        "eyebrow": "Field notes",
+        "headline": "Writing",
+        "introduction": "Observations from building companies, working with AI, and trying to make small institutions capable of ambitious things."
+      }
+    },
+    {
+      "id": "about",
+      "title": "About",
+      "path": "/about",
+      "content": {
+        "type": "about",
+        "eyebrow": "About",
+        "headline": "Building from the edge can be an advantage.",
+        "lead": "I am a Faroese software engineer and entrepreneur. My work sits where technology, learning, business and institution-building meet.",
+        "body": [
+          "I have spent my career turning difficult systems into things people can understand and use: simulation-based learning, data-rich web applications, software companies and, now, a durable memory layer for human and AI collaboration.",
+          "Today I lead Usable, chair the board of the University of the Faroe Islands and Ocean Rainforest, and continue selected work through Tøkni. The common thread is capacity: helping people, organisations and small communities act with more knowledge and a longer horizon.",
+          "This site is where I write in my own voice about what we are learning along the way."
+        ],
+        "principlesTitle": "What keeps showing up",
+        "principles": [
+          "Context compounds when it is kept alive.",
+          "Small places can build globally useful things.",
+          "Technology matters most when it strengthens human judgement.",
+          "Institutions deserve the same care as products."
+        ],
+        "contactTitle": "A useful conversation starts simply.",
+        "contactBody": "Write to me about Usable, the Faroe Islands, technology, education, climate ventures or a difficult system worth making clearer."
+      }
+    },
+    {
+      "id": "article-why-writing-here",
+      "title": "Why I am writing here",
+      "path": "/writing/why-i-am-writing-here",
+      "content": {
+        "type": "article",
+        "title": "Why I am writing here",
+        "slug": "why-i-am-writing-here",
+        "summary": "A personal site should be more than a list of roles. This is a place to keep the thinking that happens between the projects.",
+        "publishedAt": "2026-08-02",
+        "updatedAt": "2026-08-02",
+        "status": "published",
+        "topics": ["Field notes", "Usable", "Faroe Islands"],
+        "canonicalUrl": "https://www.olavurellefsen.com/writing/why-i-am-writing-here",
+        "heroImage": {
+          "src": "/images/olavur-ellefsen.png",
+          "alt": "Ólavur Ellefsen in Tórshavn"
+        },
+        "bodyMarkdown": "A list of titles can tell you where someone spends time. It rarely tells you what they are noticing.\n\nI wanted a place for the second part: the ideas that appear while building companies, working with new technology and helping institutions make decisions with consequences beyond the next quarter.\n\n## The work between the work\n\nMost useful lessons do not arrive as polished announcements. They emerge as a changed assumption, a failed experiment, a surprising conversation or a tool that quietly alters how a team thinks. LinkedIn is good for starting a conversation. Product sites are good for explaining a product. Neither is quite the right permanent home for those field notes.\n\nThis site is. I will write about durable AI memory, founder work, learning systems, the Faroe Islands, and the practical business of building from a small place with a wide horizon.\n\n## Why Usable CMS\n\nThe site also has to practise what I am working on. Its content lives in Usable, where drafts, published versions and the context behind them can remain connected. The public website is still a fast, independent renderer, with a checked-in fallback if the content service is unavailable.\n\nThat split matters. Tools should increase your agency without taking your work hostage.\n\n## A working notebook in public\n\nI expect the writing here to be concrete, occasionally unfinished and revised when reality provides a better answer. The promise is not a stream of certainty. It is a useful record of the work and what it teaches."
+      }
+    }
+  ],
+  "pageTemplates": [
+    {
+      "id": "founder-note",
+      "name": "Founder note",
+      "description": "A dated long-form article with summary, topics and social metadata.",
+      "category": "Writing",
+      "routePattern": "/writing/[slug]",
+      "defaultSlug": "new-note",
+      "defaultTitle": "New note",
+      "defaultContent": {
+        "type": "article",
+        "title": "New note",
+        "slug": "new-note",
+        "summary": "A concise description of the note.",
+        "publishedAt": "2026-08-02",
+        "status": "draft",
+        "topics": [],
+        "canonicalUrl": "https://www.olavurellefsen.com/writing/new-note",
+        "bodyMarkdown": "Start writing here."
+      }
+    }
+  ]
+}

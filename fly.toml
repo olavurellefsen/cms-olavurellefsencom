@@ -1,0 +1,34 @@
+app = "olavurellefsen-com"
+primary_region = "ams"
+kill_signal = "SIGINT"
+kill_timeout = "5s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  CMS_CONTENT_SOURCE = "usable"
+  HOSTNAME = "0.0.0.0"
+  NODE_ENV = "production"
+  PORT = "3000"
+  USABLE_API_BASE_URL = "https://usable.dev"
+
+[http_service]
+  auto_start_machines = true
+  auto_stop_machines = "stop"
+  force_https = true
+  internal_port = 3000
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "20s"
+    method = "GET"
+    path = "/health"
+    timeout = "3s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"

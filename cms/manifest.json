@@ -1,0 +1,295 @@
+{
+  "id": "olavurellefsen-site-manifest",
+  "version": 1,
+  "fields": [
+    {
+      "id": "global.siteName",
+      "label": "Site name",
+      "kind": "text",
+      "path": "siteName",
+      "scope": "global"
+    },
+    {
+      "id": "global.siteDescription",
+      "label": "Site description",
+      "kind": "text",
+      "path": "siteDescription",
+      "scope": "global"
+    },
+    {
+      "id": "global.navigation.label",
+      "label": "Navigation label",
+      "kind": "text",
+      "path": "navigation.*.label",
+      "scope": "global"
+    },
+    {
+      "id": "global.navigation.href",
+      "label": "Navigation link",
+      "kind": "link",
+      "path": "navigation.*.href",
+      "scope": "global"
+    },
+    {
+      "id": "global.author.portrait",
+      "label": "Portrait",
+      "kind": "image",
+      "path": "author.portrait.src",
+      "scope": "global"
+    },
+    {
+      "id": "global.author.portraitAlt",
+      "label": "Portrait alt text",
+      "kind": "text",
+      "path": "author.portrait.alt",
+      "scope": "global"
+    },
+    {
+      "id": "global.footer",
+      "label": "Footer text",
+      "kind": "text",
+      "path": "footer",
+      "scope": "global"
+    },
+
+    {
+      "id": "home.eyebrow",
+      "label": "Home eyebrow",
+      "kind": "text",
+      "path": "eyebrow",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
+      "id": "home.headline",
+      "label": "Home headline",
+      "kind": "text",
+      "path": "headline",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
+      "id": "home.introduction",
+      "label": "Home introduction",
+      "kind": "text",
+      "path": "introduction",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
+      "id": "home.focus.label",
+      "label": "Focus label",
+      "kind": "text",
+      "path": "currentFocus.label",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
+      "id": "home.focus.title",
+      "label": "Focus title",
+      "kind": "text",
+      "path": "currentFocus.title",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
+      "id": "home.focus.body",
+      "label": "Focus body",
+      "kind": "text",
+      "path": "currentFocus.body",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
+      "id": "home.focus.href",
+      "label": "Focus link",
+      "kind": "link",
+      "path": "currentFocus.href",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
+      "id": "home.focus.linkLabel",
+      "label": "Focus link label",
+      "kind": "text",
+      "path": "currentFocus.linkLabel",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
+      "id": "home.workTitle",
+      "label": "Work section title",
+      "kind": "text",
+      "path": "selectedWorkTitle",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
+      "id": "home.latestWritingTitle",
+      "label": "Writing section title",
+      "kind": "text",
+      "path": "latestWritingTitle",
+      "scope": "page",
+      "pageId": "home"
+    },
+
+    {
+      "id": "writing.eyebrow",
+      "label": "Writing eyebrow",
+      "kind": "text",
+      "path": "eyebrow",
+      "scope": "page",
+      "pageId": "writing"
+    },
+    {
+      "id": "writing.headline",
+      "label": "Writing headline",
+      "kind": "text",
+      "path": "headline",
+      "scope": "page",
+      "pageId": "writing"
+    },
+    {
+      "id": "writing.introduction",
+      "label": "Writing introduction",
+      "kind": "text",
+      "path": "introduction",
+      "scope": "page",
+      "pageId": "writing"
+    },
+
+    {
+      "id": "about.eyebrow",
+      "label": "About eyebrow",
+      "kind": "text",
+      "path": "eyebrow",
+      "scope": "page",
+      "pageId": "about"
+    },
+    {
+      "id": "about.headline",
+      "label": "About headline",
+      "kind": "text",
+      "path": "headline",
+      "scope": "page",
+      "pageId": "about"
+    },
+    {
+      "id": "about.lead",
+      "label": "About lead",
+      "kind": "text",
+      "path": "lead",
+      "scope": "page",
+      "pageId": "about"
+    },
+    {
+      "id": "about.body",
+      "label": "About paragraph",
+      "kind": "text",
+      "path": "body.*",
+      "scope": "page",
+      "pageId": "about"
+    },
+    {
+      "id": "about.principlesTitle",
+      "label": "Principles title",
+      "kind": "text",
+      "path": "principlesTitle",
+      "scope": "page",
+      "pageId": "about"
+    },
+    {
+      "id": "about.principle",
+      "label": "Principle",
+      "kind": "text",
+      "path": "principles.*",
+      "scope": "page",
+      "pageId": "about"
+    },
+    {
+      "id": "about.contactTitle",
+      "label": "Contact title",
+      "kind": "text",
+      "path": "contactTitle",
+      "scope": "page",
+      "pageId": "about"
+    },
+    {
+      "id": "about.contactBody",
+      "label": "Contact body",
+      "kind": "text",
+      "path": "contactBody",
+      "scope": "page",
+      "pageId": "about"
+    },
+
+    {
+      "id": "article.title",
+      "label": "Article title",
+      "kind": "text",
+      "path": "title",
+      "scope": "page",
+      "pageId": "article-why-writing-here"
+    },
+    {
+      "id": "article.summary",
+      "label": "Article summary",
+      "kind": "text",
+      "path": "summary",
+      "scope": "page",
+      "pageId": "article-why-writing-here"
+    },
+    {
+      "id": "article.body",
+      "label": "Article body",
+      "kind": "text",
+      "path": "bodyMarkdown",
+      "scope": "page",
+      "pageId": "article-why-writing-here"
+    },
+    {
+      "id": "article.hero",
+      "label": "Article image",
+      "kind": "image",
+      "path": "heroImage.src",
+      "scope": "page",
+      "pageId": "article-why-writing-here"
+    },
+    {
+      "id": "article.heroAlt",
+      "label": "Article image alt text",
+      "kind": "text",
+      "path": "heroImage.alt",
+      "scope": "page",
+      "pageId": "article-why-writing-here"
+    }
+  ],
+  "collections": [
+    {
+      "id": "home.selectedWork",
+      "label": "Selected work",
+      "path": "selectedWork",
+      "scope": "page",
+      "pageId": "home",
+      "itemIdentity": "index",
+      "allowedOperations": ["add", "duplicate", "delete", "move"],
+      "fields": [
+        { "id": "name", "label": "Name", "kind": "text", "path": "name" },
+        { "id": "role", "label": "Role", "kind": "text", "path": "role" },
+        { "id": "description", "label": "Description", "kind": "text", "path": "description" },
+        { "id": "href", "label": "Link", "kind": "link", "path": "href" },
+        { "id": "accent", "label": "Accent", "kind": "text", "path": "accent" }
+      ]
+    },
+    {
+      "id": "article.topics",
+      "label": "Article topics",
+      "path": "topics",
+      "scope": "page",
+      "pageId": "article-why-writing-here",
+      "itemIdentity": "index",
+      "allowedOperations": ["add", "delete", "move"],
+      "fields": [{ "id": "value", "label": "Topic", "kind": "text", "path": "$value" }]
+    }
+  ]
+}
