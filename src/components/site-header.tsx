@@ -11,7 +11,16 @@ export function SiteHeader({ content }: { content: GlobalContent }) {
       <div className="site-header__inner">
         <Link className="wordmark" href="/" aria-label={`${content.siteName}, home`}>
           <span aria-hidden="true">ÓE</span>
-          <span className="wordmark__name">{content.siteName}</span>
+          <span
+            className="wordmark__name"
+            {...cmsRegion({
+              id: "global.siteName",
+              label: "Site name",
+              path: "siteName",
+            })}
+          >
+            {content.siteName}
+          </span>
         </Link>
         <nav aria-label="Primary navigation">
           <ul className="nav-list">

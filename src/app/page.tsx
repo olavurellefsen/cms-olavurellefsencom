@@ -109,7 +109,16 @@ export default async function HomePage() {
             >
               {content.currentFocus.body}
             </p>
-            <a className="text-link text-link--light" href={content.currentFocus.href}>
+            <a
+              className="text-link text-link--light"
+              href={content.currentFocus.href}
+              {...cmsRegion({
+                id: "home.focus.linkLabel",
+                label: "Focus link label",
+                path: "currentFocus.linkLabel",
+                pageId: "home",
+              })}
+            >
               {content.currentFocus.linkLabel} <span aria-hidden="true">↗</span>
             </a>
           </div>
@@ -136,10 +145,38 @@ export default async function HomePage() {
               <a href={item.href}>
                 <span className="work-list__number">{String(index + 1).padStart(2, "0")}</span>
                 <div className="work-list__title">
-                  <h3>{item.name}</h3>
-                  <p>{item.role}</p>
+                  <h3
+                    {...cmsRegion({
+                      id: `home.work.${index}.name`,
+                      label: `Work ${index + 1} name`,
+                      path: `selectedWork.${index}.name`,
+                      pageId: "home",
+                    })}
+                  >
+                    {item.name}
+                  </h3>
+                  <p
+                    {...cmsRegion({
+                      id: `home.work.${index}.role`,
+                      label: `Work ${index + 1} role`,
+                      path: `selectedWork.${index}.role`,
+                      pageId: "home",
+                    })}
+                  >
+                    {item.role}
+                  </p>
                 </div>
-                <p className="work-list__description">{item.description}</p>
+                <p
+                  className="work-list__description"
+                  {...cmsRegion({
+                    id: `home.work.${index}.description`,
+                    label: `Work ${index + 1} description`,
+                    path: `selectedWork.${index}.description`,
+                    pageId: "home",
+                  })}
+                >
+                  {item.description}
+                </p>
                 <span className="work-list__arrow" aria-hidden="true">
                   ↗
                 </span>

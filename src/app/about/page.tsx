@@ -53,6 +53,12 @@ export default async function AboutPage() {
           width={446}
           height={514}
           sizes="(max-width: 760px) 70vw, 28vw"
+          {...cmsRegion({
+            id: "global.author.portrait",
+            kind: "image",
+            label: "Portrait",
+            path: "author.portrait.src",
+          })}
         />
       </section>
       <section className="about-body section-shell">
