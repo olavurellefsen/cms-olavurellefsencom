@@ -46,13 +46,22 @@ const response = await fetch(setupUrl, {
   body: JSON.stringify(payload),
 });
 const responseText = await response.text();
-if (!response.ok) {
+let result;
+if (response.ok) {
+  result = JSON.parse(responseText);
+} else if (
+  responseText.includes("Failed to create fragment type") ||
+  responseText.includes("Fragment type not found in workspace")
+) {
+  console.warn(
+    "Usable custom fragment-type provisioning is unavailable; using the workspace default content type.",
+  );
+  result = await registerWithWorkspaceDefaultType(payload, setupToken);
+} else {
   console.error(`CMS registration failed: ${response.status} ${response.statusText}`);
   console.error(responseText);
   process.exit(1);
 }
-
-const result = JSON.parse(responseText);
 const workspaceId = result.workspace?.id || result.workspaceId || "";
 const siteId = result.site?.id || result.siteId || "";
 const integrationKey =
@@ -122,3 +131,209 @@ console.log(
 console.log(
   "Public identifiers written to cms/site-binding.json; private values written to .env.local.",
 );
+
+async function registerWithWorkspaceDefaultType(input, token) {
+  const usableOrigin = "https://usable.dev";
+  const cmsOrigin = new URL(setupUrl).origin;
+  const slug = "olavur-ellefsen";
+  const workspaceName = `${input.siteName} CMS`;
+  const authHeaders = { Authorization: `Bearer ${token}` };
+  const jsonHeaders = { ...authHeaders, "Content-Type": "application/json" };
+
+  const workspacePayload = await requestJson(`${usableOrigin}/api/workspaces`, {
+    headers: authHeaders,
+  });
+  const workspace = (workspacePayload.workspaces || []).find(
+    (candidate) => candidate.name === workspaceName,
+  );
+  if (!workspace?.id) throw new Error(`Usable workspace not found: ${workspaceName}`);
+
+  const typePayload = await requestJson(
+    `${usableOrigin}/api/workspaces/${workspace.id}/fragment-types`,
+    { headers: authHeaders },
+  );
+  const fragmentType =
+    (typePayload.fragmentTypes || []).find((candidate) => candidate.name === "Knowledge") ||
+    typePayload.fragmentTypes?.[0];
+  if (!fragmentType?.id) throw new Error("Usable workspace has no durable fragment type");
+
+  const existingFragments = await requestJson(
+    `${usableOrigin}/api/memory-fragments?workspaceId=${workspace.id}&tags=site%3A${slug}&limit=50`,
+    { headers: authHeaders },
+  );
+  const fragments = existingFragments.fragments || [];
+  const globalFragment = await ensureFragment({
+    content: input.globalContent,
+    fragmentTypeId: fragmentType.id,
+    fragments,
+    summary: `Shared CMS configuration for ${input.siteName}.`,
+    tags: ["usable-cms", "usable-cms-global-config", `site:${slug}`],
+    title: `${input.siteName} Global Config`,
+    token,
+    usableOrigin,
+    workspaceId: workspace.id,
+  });
+  const pageFragments = [];
+  for (const page of input.pages) {
+    pageFragments.push({
+      ...page,
+      fragmentId: await ensureFragment({
+        content: page.content,
+        fragmentTypeId: fragmentType.id,
+        fragments,
+        summary: `CMS page content for ${page.title} (${page.path}).`,
+        tags: ["usable-cms", "usable-cms-page", `site:${slug}`, `cms-page:${page.id}`],
+        title: `${input.siteName}: ${page.title}`,
+        token,
+        usableOrigin,
+        workspaceId: workspace.id,
+      }),
+    });
+  }
+
+  const sitesPayload = await requestJson(`${cmsOrigin}/api/sites`, { headers: authHeaders });
+  let site = (sitesPayload.sites || []).find((candidate) => candidate.slug === slug);
+  if (!site) {
+    const sitePayload = await requestJson(`${cmsOrigin}/api/sites`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        slug,
+        displayName: input.siteName,
+        allowedOrigins: input.allowedOrigins,
+        defaultWorkspaceId: workspace.id,
+      }),
+    });
+    site = sitePayload.site;
+  }
+  if (!site?.id) throw new Error("Usable CMS did not return a site id");
+
+  await requestJson(`${cmsOrigin}/api/sites/${site.id}/workspace-bindings`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({
+      workspaceId: workspace.id,
+      rolePolicy: "members",
+      contentRoot: globalFragment,
+      assetRoot: "usable-files",
+    }),
+  });
+  const keyPayload = await requestJson(`${cmsOrigin}/api/sites/${site.id}/embed-keys`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ allowedOrigins: input.allowedOrigins }),
+  });
+  const integrationKey = keyPayload.token || keyPayload.embedKey?.token;
+  if (!integrationKey) throw new Error("Usable CMS did not return a public integration key");
+
+  const pageIds = new Map(pageFragments.map((page) => [page.id, page.fragmentId]));
+  const bindEntry = (entry) => ({
+    ...entry,
+    fragmentId: entry.scope === "page" ? pageIds.get(entry.pageId) : globalFragment,
+  });
+  await requestJson(`${cmsOrigin}/api/sites/${site.id}/regions`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({
+      workspaceId: workspace.id,
+      regions: input.manifest.regions.map(bindEntry),
+      collections: input.manifest.collections.map(bindEntry),
+    }),
+  });
+
+  const permissions = serverTokenPermissions();
+  const tokenPayload = await requestJson(`${usableOrigin}/api/tokens`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({
+      globalPermissions: emptyPermissions(),
+      name: `${input.siteName} personal website server read-write token`,
+      workspacePermissions: [{ workspaceId: workspace.id, permissions }],
+    }),
+  });
+  if (!tokenPayload.token) throw new Error("Usable did not return the server token secret");
+
+  return {
+    workspace: { id: workspace.id },
+    site: { id: site.id },
+    embedKey: { token: integrationKey },
+    serverToken: { token: tokenPayload.token },
+    contentFragments: {
+      global: { fragmentId: globalFragment },
+      pages: pageFragments.map((page) => ({ id: page.id, fragmentId: page.fragmentId })),
+    },
+  };
+}
+
+async function ensureFragment({
+  content,
+  fragmentTypeId,
+  fragments,
+  summary,
+  tags,
+  title,
+  token,
+  usableOrigin,
+  workspaceId,
+}) {
+  const existing = fragments.find(
+    (fragment) => fragment.title === title && tags.every((tag) => fragment.tags?.includes(tag)),
+  );
+  if (existing?.id) return existing.id;
+  const payload = await requestJson(`${usableOrigin}/api/memory-fragments`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workspaceId,
+      fragmentTypeId,
+      title,
+      summary,
+      content: JSON.stringify(content, null, 2),
+      tags,
+    }),
+  });
+  const fragmentId = payload.fragmentId || payload.fragment?.id || payload.id;
+  if (!fragmentId) throw new Error(`Usable did not return a fragment id for ${title}`);
+  return fragmentId;
+}
+
+async function requestJson(url, init, attempt = 1) {
+  const response = await fetch(url, { ...init, cache: "no-store" });
+  const text = await response.text();
+  if (!response.ok) {
+    if (response.status >= 500 && attempt < 4) {
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+      return requestJson(url, init, attempt + 1);
+    }
+    throw new Error(`${response.status} ${response.statusText} from ${url}: ${text.slice(0, 500)}`);
+  }
+  return text ? JSON.parse(text) : {};
+}
+
+function emptyPermissions() {
+  return {
+    fragments: { read: false, create: false, update: false, delete: false },
+    search: { basic: false, advanced: false },
+    workspace: {
+      read: false,
+      create: false,
+      update: false,
+      delete: false,
+      manage_members: false,
+      manage_invitations: false,
+      manage_fragment_types: false,
+      subscribe: false,
+    },
+    notifications: { read: false },
+    profile: { read: false, update: false },
+  };
+}
+
+function serverTokenPermissions() {
+  return {
+    ...emptyPermissions(),
+    fragments: { read: true, create: true, update: true, delete: false },
+    search: { basic: true, advanced: false },
+    workspace: { ...emptyPermissions().workspace, read: true },
+  };
+}

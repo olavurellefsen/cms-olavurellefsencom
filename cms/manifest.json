@@ -1,7 +1,7 @@
 {
   "id": "olavurellefsen-site-manifest",
   "version": 1,
-  "fields": [
+  "regions": [
     {
       "id": "global.siteName",
       "label": "Site name",
@@ -272,7 +272,7 @@
       "scope": "page",
       "pageId": "home",
       "itemIdentity": "index",
-      "allowedOperations": ["add", "duplicate", "delete", "move"],
+      "allowedOperations": ["create", "update", "delete"],
       "fields": [
         { "id": "name", "label": "Name", "kind": "text", "path": "name" },
         { "id": "role", "label": "Role", "kind": "text", "path": "role" },
@@ -288,7 +288,7 @@
       "scope": "page",
       "pageId": "article-why-writing-here",
       "itemIdentity": "index",
-      "allowedOperations": ["add", "delete", "move"],
+      "allowedOperations": ["create", "update", "delete"],
       "fields": [{ "id": "value", "label": "Topic", "kind": "text", "path": "$value" }]
     }
   ]

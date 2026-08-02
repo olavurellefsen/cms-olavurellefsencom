@@ -18,7 +18,7 @@ export function GET() {
       site: siteBinding.siteId,
       siteId: siteBinding.siteId,
       workspaceId: siteBinding.workspaceId,
-      fields: manifest.fields.map(withFragmentId),
+      regions: manifest.regions.map(withFragmentId),
       collections: manifest.collections.map(withFragmentId),
     },
     {
