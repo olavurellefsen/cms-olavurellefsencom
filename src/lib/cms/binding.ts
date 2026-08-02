@@ -13,3 +13,12 @@ export const siteBinding = rawBinding as SiteBinding;
 export function pageFragmentId(pageId: string) {
   return siteBinding.pageFragmentIds[pageId] || "";
 }
+
+export type CmsPageReference = {
+  id: string;
+  title: string;
+  path: string;
+  fragmentId?: string;
+  order?: number;
+  status?: string;
+};

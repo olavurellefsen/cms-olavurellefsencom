@@ -1,6 +1,7 @@
 import { pageFragmentId, siteBinding } from "./binding";
 
 type RegionOptions = {
+  fragmentId?: string;
   id: string;
   kind?: "text" | "link" | "image";
   label: string;
@@ -8,8 +9,16 @@ type RegionOptions = {
   pageId?: string;
 };
 
-export function cmsRegion({ id, kind = "text", label, path, pageId }: RegionOptions) {
-  const fragmentId = pageId ? pageFragmentId(pageId) : siteBinding.globalFragmentId;
+export function cmsRegion({
+  fragmentId: fragmentIdOverride,
+  id,
+  kind = "text",
+  label,
+  path,
+  pageId,
+}: RegionOptions) {
+  const fragmentId =
+    fragmentIdOverride || (pageId ? pageFragmentId(pageId) : siteBinding.globalFragmentId);
 
   return {
     "data-usable-cms-region": id,

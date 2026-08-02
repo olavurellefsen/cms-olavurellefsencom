@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { getPublishedArticles } from "@/lib/content/load";
 
+export const revalidate = 60;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://www.olavurellefsen.com";
   const articles = await getPublishedArticles();

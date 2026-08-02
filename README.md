@@ -20,6 +20,14 @@ Without CMS environment variables, the site serves validated fallback content fr
 
 The setup script updates public ids in `cms/site-binding.json` and writes private local values to `.env.local`. The server token must also be configured as the Fly secret `USABLE_CMS_SERVER_TOKEN`.
 
+Re-run registration after adding a checked-in page or changing `cms/manifest.json`. Registration is idempotent: it creates any missing page fragment (including the collaboration field note), synchronizes full fragment UUIDs into the CMS manifest, and refreshes `cms/site-binding.json`.
+
+### Runtime pages and chat
+
+Signed-in editors can use **Pages → New founder note** to create a real `/writing/<slug>` page from the `founder-note` template. Every created page is its own `CMS Page` fragment. **Hide page** archives the page in the CMS manifest without deleting its fragment. Public page discovery is refreshed every 60 seconds, so published runtime pages automatically appear on Writing, RSS, and the sitemap.
+
+The editor includes embedded Usable chat. It receives the active page fragment, published baseline, working draft, changed paths, and manifest, allowing the broker to safely create, read, update, publish, and hide declared CMS content. The browser only receives the public `ucms_` integration key; `USABLE_CMS_SERVER_TOKEN` remains server-only.
+
 ## Verification
 
 ```sh

@@ -8,6 +8,8 @@ import { SiteHeader } from "@/components/site-header";
 import { getGlobalContent } from "@/lib/content/load";
 import { safeJsonLd } from "@/lib/seo/json-ld";
 
+export const revalidate = 60;
+
 export const viewport: Viewport = {
   colorScheme: "light",
   themeColor: "#f2f5f1",

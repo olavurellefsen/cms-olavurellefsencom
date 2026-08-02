@@ -1,15 +1,9 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { getCmsPageDirectory } from "@/lib/content/load";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
-
-const publicPaths: Record<string, string> = {
-  home: "/",
-  writing: "/writing",
-  about: "/about",
-  "article-why-writing-here": "/writing/why-i-am-writing-here",
-};
 
 export default async function CmsPage({
   searchParams,
@@ -17,6 +11,7 @@ export default async function CmsPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const { page = "home" } = await searchParams;
-  const publicPath = publicPaths[page] || "/";
+  const pages = await getCmsPageDirectory();
+  const publicPath = pages.find((candidate) => candidate.id === page)?.path || "/";
   redirect(`${publicPath}?cms=1`);
 }
