@@ -1,12 +1,13 @@
 {
   "siteId": "42782a7c-6918-4e84-b08b-cc3c859621ab",
   "workspaceId": "f10b2793-6ac0-43c8-902c-5eb0a55f3713",
-  "integrationKey": "ucms_fehxZptTMeVWL8iKRL8NsO6KNoq58pHx",
+  "integrationKey": "ucms_FXKXtufTrmDU-qjnFKOLA2tDE9BLhHc1",
   "globalFragmentId": "0e5c1509-c235-440e-9e70-ed6c56392406",
   "pageFragmentIds": {
     "home": "489909b4-df12-4aed-bb7a-090486b37071",
     "writing": "81d01edd-eac5-4ca5-a6f9-ac95994387a0",
     "about": "6c85f238-aa62-4174-b3f4-88236e75bec0",
+    "article-claude-codex-usable-collaboration": "35f1b219-5901-474b-ae16-28a8d541bf34",
     "article-why-writing-here": "af227f70-be45-4554-82f4-e91e066ec175"
   }
 }

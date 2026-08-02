@@ -1,4 +1,5 @@
 import { pageFragmentId, siteBinding } from "@/lib/cms/binding";
+import { fallbackSite } from "@/lib/content/fallback";
 import manifest from "../../../../../cms/manifest.json";
 
 type ScopedEntry = { scope?: string; pageId?: string };
@@ -18,11 +19,20 @@ export function GET() {
       site: siteBinding.siteId,
       siteId: siteBinding.siteId,
       workspaceId: siteBinding.workspaceId,
+      pages: fallbackSite.pages.map((page, order) => ({
+        id: page.id,
+        title: page.title,
+        path: page.path,
+        fragmentId: pageFragmentId(page.id) || undefined,
+        order,
+        status: "active",
+      })),
+      pageTemplates: fallbackSite.pageTemplates,
       regions: manifest.regions.map(withFragmentId),
       collections: manifest.collections.map(withFragmentId),
     },
     {
-      headers: { "Cache-Control": "public, max-age=0, s-maxage=60" },
+      headers: { "Cache-Control": "no-store" },
     },
   );
 }

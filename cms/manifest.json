@@ -224,7 +224,7 @@
     },
 
     {
-      "id": "article.title",
+      "id": "article-why-writing-here.article.title",
       "label": "Article title",
       "kind": "text",
       "path": "title",
@@ -232,7 +232,7 @@
       "pageId": "article-why-writing-here"
     },
     {
-      "id": "article.summary",
+      "id": "article-why-writing-here.article.summary",
       "label": "Article summary",
       "kind": "text",
       "path": "summary",
@@ -240,7 +240,7 @@
       "pageId": "article-why-writing-here"
     },
     {
-      "id": "article.body",
+      "id": "article-why-writing-here.article.bodyMarkdown",
       "label": "Article body",
       "kind": "text",
       "path": "bodyMarkdown",
@@ -248,7 +248,7 @@
       "pageId": "article-why-writing-here"
     },
     {
-      "id": "article.hero",
+      "id": "article-why-writing-here.article.heroImage.src",
       "label": "Article image",
       "kind": "image",
       "path": "heroImage.src",
@@ -256,12 +256,52 @@
       "pageId": "article-why-writing-here"
     },
     {
-      "id": "article.heroAlt",
+      "id": "article-why-writing-here.article.heroImage.alt",
       "label": "Article image alt text",
       "kind": "text",
       "path": "heroImage.alt",
       "scope": "page",
       "pageId": "article-why-writing-here"
+    },
+    {
+      "id": "article-claude-codex-usable-collaboration.article.title",
+      "label": "Article title",
+      "kind": "text",
+      "path": "title",
+      "scope": "page",
+      "pageId": "article-claude-codex-usable-collaboration"
+    },
+    {
+      "id": "article-claude-codex-usable-collaboration.article.summary",
+      "label": "Article summary",
+      "kind": "text",
+      "path": "summary",
+      "scope": "page",
+      "pageId": "article-claude-codex-usable-collaboration"
+    },
+    {
+      "id": "article-claude-codex-usable-collaboration.article.bodyMarkdown",
+      "label": "Article body",
+      "kind": "text",
+      "path": "bodyMarkdown",
+      "scope": "page",
+      "pageId": "article-claude-codex-usable-collaboration"
+    },
+    {
+      "id": "article-claude-codex-usable-collaboration.article.heroImage.src",
+      "label": "Article image",
+      "kind": "image",
+      "path": "heroImage.src",
+      "scope": "page",
+      "pageId": "article-claude-codex-usable-collaboration"
+    },
+    {
+      "id": "article-claude-codex-usable-collaboration.article.heroImage.alt",
+      "label": "Article image alt text",
+      "kind": "text",
+      "path": "heroImage.alt",
+      "scope": "page",
+      "pageId": "article-claude-codex-usable-collaboration"
     }
   ],
   "collections": [
@@ -282,11 +322,21 @@
       ]
     },
     {
-      "id": "article.topics",
+      "id": "article-why-writing-here.article.topics",
       "label": "Article topics",
       "path": "topics",
       "scope": "page",
       "pageId": "article-why-writing-here",
+      "itemIdentity": "index",
+      "allowedOperations": ["create", "update", "delete"],
+      "fields": [{ "id": "value", "label": "Topic", "kind": "text", "path": "$value" }]
+    },
+    {
+      "id": "article-claude-codex-usable-collaboration.article.topics",
+      "label": "Article topics",
+      "path": "topics",
+      "scope": "page",
+      "pageId": "article-claude-codex-usable-collaboration",
       "itemIdentity": "index",
       "allowedOperations": ["create", "update", "delete"],
       "fields": [{ "id": "value", "label": "Topic", "kind": "text", "path": "$value" }]

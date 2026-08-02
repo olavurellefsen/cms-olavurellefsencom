@@ -26,7 +26,7 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
             signedIn: true,
             authorized: true,
             user: { email: "olavur@ellefsen.fo" },
-            capabilities: { edit: true, publish: true, restore: true, upload: true }
+            capabilities: { chat: true, edit: true, publish: true, restore: true, upload: true }
           }),
           login: async () => ({}),
           content: async ({ fragmentIds }) => ({
@@ -46,6 +46,25 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
           }),
           restore: async (versionId) => {
             window.__cmsCalls.push({ operation: "restore", versionId });
+          },
+          createPage: async (input) => {
+            window.__cmsCalls.push({ operation: "createPage", input });
+            return { page: { id: input.id, title: input.title, path: input.path } };
+          },
+          deletePage: async (pageId) => {
+            window.__cmsCalls.push({ operation: "deletePage", pageId });
+          },
+          pages: async () => ({ pages: [] }),
+          chat: async (message, input) => {
+            window.__cmsCalls.push({ operation: "chat", message, input });
+            return {
+              message: "I updated the headline in the draft.",
+              changes: [{
+                targetId: ${JSON.stringify(binding.pageFragmentIds.home)},
+                path: "headline",
+                afterRef: JSON.stringify("A chat-updated headline")
+              }]
+            };
           }
         };
       `,
@@ -99,8 +118,47 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
 
   await page.getByRole("button", { name: "Pages" }).click();
   await expect(page.getByRole("navigation", { name: "Website pages" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Why I am writing here/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New founder note" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Why I am writing here", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "New founder note" }).click();
+  await expect(page.getByRole("dialog", { name: "Create a writing page" })).toBeVisible();
+  await expect(page.getByText("one independently editable CMS Page fragment")).toBeVisible();
+  await page.getByRole("button", { name: "Close new page dialog" }).click();
   await page.getByRole("button", { name: "Close panel" }).click();
+
+  await page.getByRole("button", { name: "Open Usable CMS chat" }).click();
+  await page
+    .getByRole("textbox", { name: "Ask Usable chat to work with CMS content" })
+    .fill("Improve the headline");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByText("I updated the headline in the draft.")).toBeVisible();
+  const chatPublish = page.getByRole("button", { name: "Publish", exact: true });
+  await expect(chatPublish).toBeEnabled();
+  await chatPublish.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const calls = (
+          window as Window & {
+            __cmsCalls?: Array<{
+              operation: string;
+              input?: { changes?: Array<{ afterRef?: string }> };
+            }>;
+          }
+        ).__cmsCalls;
+        return calls?.some(
+          (call) =>
+            call.operation === "publish" &&
+            call.input?.changes?.some(
+              (change) => change.afterRef === JSON.stringify("A chat-updated headline"),
+            ),
+        );
+      }),
+    )
+    .toBe(true);
+  await page.getByRole("button", { name: "Close Usable CMS chat" }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
   const overflow = await page.evaluate(
@@ -110,7 +168,7 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await page.screenshot({ path: testInfo.outputPath("cms-inline-mobile.png"), fullPage: true });
 
   await page.getByRole("button", { name: "Pages" }).click();
-  await page.getByRole("button", { name: /Why I am writing here/ }).click();
+  await page.getByRole("button", { name: "Why I am writing here", exact: true }).click();
   await expect(page).toHaveURL(/\/writing\/why-i-am-writing-here\?cms=1$/);
   const articlePreview = page.frameLocator('iframe[title="Why I am writing here inline editor"]');
   await expect(articlePreview.getByRole("textbox", { name: "Edit Article body" })).toHaveAttribute(

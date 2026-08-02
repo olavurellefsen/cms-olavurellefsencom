@@ -3,6 +3,7 @@ import { chmod, readFile, writeFile } from "node:fs/promises";
 
 const setupUrl = process.env.USABLE_CMS_SETUP_URL || "https://cms.usable.dev/api/setup/register";
 const setupToken = process.env.USABLE_CMS_SETUP_TOKEN;
+const existingServerToken = await readExistingServerToken();
 
 if (!setupToken) {
   console.error("USABLE_CMS_SETUP_TOKEN is required. Complete the Usable CMS device login first.");
@@ -56,7 +57,7 @@ if (response.ok) {
   console.warn(
     "Usable custom fragment-type provisioning is unavailable; using the workspace default content type.",
   );
-  result = await registerWithWorkspaceDefaultType(payload, setupToken);
+  result = await registerWithWorkspaceDefaultType(payload, setupToken, existingServerToken);
 } else {
   console.error(`CMS registration failed: ${response.status} ${response.statusText}`);
   console.error(responseText);
@@ -132,7 +133,7 @@ console.log(
   "Public identifiers written to cms/site-binding.json; private values written to .env.local.",
 );
 
-async function registerWithWorkspaceDefaultType(input, token) {
+async function registerWithWorkspaceDefaultType(input, token, reusableServerToken) {
   const usableOrigin = "https://usable.dev";
   const cmsOrigin = new URL(setupUrl).origin;
   const slug = "olavur-ellefsen";
@@ -241,28 +242,53 @@ async function registerWithWorkspaceDefaultType(input, token) {
     }),
   });
 
-  const permissions = serverTokenPermissions();
-  const tokenPayload = await requestJson(`${usableOrigin}/api/tokens`, {
-    method: "POST",
-    headers: jsonHeaders,
-    body: JSON.stringify({
-      globalPermissions: emptyPermissions(),
-      name: `${input.siteName} personal website server read-write token`,
-      workspacePermissions: [{ workspaceId: workspace.id, permissions }],
-    }),
-  });
-  if (!tokenPayload.token) throw new Error("Usable did not return the server token secret");
+  const serverToken =
+    reusableServerToken ||
+    (await createServerToken({
+      headers: jsonHeaders,
+      siteName: input.siteName,
+      usableOrigin,
+      workspaceId: workspace.id,
+    }));
 
   return {
     workspace: { id: workspace.id },
     site: { id: site.id },
     embedKey: { token: integrationKey },
-    serverToken: { token: tokenPayload.token },
+    serverToken: { token: serverToken },
     contentFragments: {
       global: { fragmentId: globalFragment },
       pages: pageFragments.map((page) => ({ id: page.id, fragmentId: page.fragmentId })),
     },
   };
+}
+
+async function createServerToken({ headers, siteName, usableOrigin, workspaceId }) {
+  const permissions = serverTokenPermissions();
+  const baseName = `${siteName} personal website server read-write token`;
+  const create = (name) =>
+    requestJson(`${usableOrigin}/api/tokens`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        globalPermissions: emptyPermissions(),
+        name,
+        workspacePermissions: [{ workspaceId, permissions }],
+      }),
+    });
+
+  let tokenPayload;
+  try {
+    tokenPayload = await create(baseName);
+  } catch (error) {
+    if (error.status !== 409) throw error;
+    console.warn(
+      "The existing named server token secret is unavailable locally; creating a replacement token.",
+    );
+    tokenPayload = await create(`${baseName} (${new Date().toISOString()})`);
+  }
+  if (!tokenPayload.token) throw new Error("Usable did not return the server token secret");
+  return tokenPayload.token;
 }
 
 async function ensureFragment({
@@ -305,9 +331,27 @@ async function requestJson(url, init, attempt = 1) {
       await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
       return requestJson(url, init, attempt + 1);
     }
-    throw new Error(`${response.status} ${response.statusText} from ${url}: ${text.slice(0, 500)}`);
+    const error = new Error(
+      `${response.status} ${response.statusText} from ${url}: ${text.slice(0, 500)}`,
+    );
+    error.status = response.status;
+    throw error;
   }
   return text ? JSON.parse(text) : {};
+}
+
+async function readExistingServerToken() {
+  if (process.env.USABLE_CMS_SERVER_TOKEN) return process.env.USABLE_CMS_SERVER_TOKEN;
+  try {
+    const env = await readFile(new URL("../.env.local", import.meta.url), "utf8");
+    const line = env
+      .split(/\r?\n/)
+      .find((candidate) => candidate.startsWith("USABLE_CMS_SERVER_TOKEN="));
+    return line?.slice("USABLE_CMS_SERVER_TOKEN=".length).trim() || "";
+  } catch (error) {
+    if (error.code === "ENOENT") return "";
+    throw error;
+  }
 }
 
 function emptyPermissions() {

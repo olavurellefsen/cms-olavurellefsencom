@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { articleRegionId } from "@/lib/cms/article-regions";
 import { cmsRegion } from "@/lib/cms/regions";
 import { getArticleBySlug, getGlobalContent, getPublishedArticles } from "@/lib/content/load";
 import { safeJsonLd } from "@/lib/seo/json-ld";
@@ -81,7 +82,8 @@ export default async function ArticlePage({ params }: Props) {
           </div>
           <h1
             {...cmsRegion({
-              id: "article.title",
+              fragmentId: loaded.fragmentId,
+              id: articleRegionId(loaded.value.id, "title"),
               label: "Article title",
               path: "title",
               pageId: loaded.value.id,
@@ -92,7 +94,8 @@ export default async function ArticlePage({ params }: Props) {
           <p
             className="article-header__summary"
             {...cmsRegion({
-              id: "article.summary",
+              fragmentId: loaded.fragmentId,
+              id: articleRegionId(loaded.value.id, "summary"),
               label: "Article summary",
               path: "summary",
               pageId: loaded.value.id,
@@ -112,6 +115,14 @@ export default async function ArticlePage({ params }: Props) {
               width={2160}
               height={2700}
               priority
+              {...cmsRegion({
+                fragmentId: loaded.fragmentId,
+                id: articleRegionId(loaded.value.id, "heroImage.src"),
+                kind: "image",
+                label: "Article image",
+                path: "heroImage.src",
+                pageId: loaded.value.id,
+              })}
             />
           </figure>
         ) : null}
@@ -123,7 +134,8 @@ export default async function ArticlePage({ params }: Props) {
           <div
             className="article-prose"
             {...cmsRegion({
-              id: "article.body",
+              fragmentId: loaded.fragmentId,
+              id: articleRegionId(loaded.value.id, "bodyMarkdown"),
               label: "Article body",
               path: "bodyMarkdown",
               pageId: loaded.value.id,
