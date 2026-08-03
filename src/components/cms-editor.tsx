@@ -477,6 +477,14 @@ export function CmsEditor() {
     if (!doc || !manifest) return;
 
     doc.documentElement.classList.add("cms-inline-preview");
+    const workCollection = manifest.collections?.find(
+      (collection) => collection.id === "home.selectedWork",
+    );
+    const workDraft = workCollection ? dirtyRef.current[workCollection.id] : undefined;
+    const workDraftItems = Array.isArray(workDraft) ? normalizeWorkItems(workDraft) : undefined;
+    if (workCollection && workDraftItems) {
+      renderCurrentWorkPreview(doc, workDraftItems, workCollection);
+    }
     const cleanups: Array<() => void> = [];
     const runtimeRegions: Record<string, CmsRegion> = {};
 
@@ -509,8 +517,14 @@ export function CmsEditor() {
         pageId,
       };
       runtimeRegions[id] = region;
+      const collectionValue =
+        workDraftItems && region.path?.startsWith("selectedWork.")
+          ? readPath({ selectedWork: workDraftItems }, region.path)
+          : undefined;
       const liveValue =
-        dirtyRef.current[id] ?? readPath(fragmentsRef.current[fragmentId], region.path || "");
+        dirtyRef.current[id] ??
+        collectionValue ??
+        readPath(fragmentsRef.current[fragmentId], region.path || "");
 
       if (region.kind === "image" && element instanceof HTMLImageElement) {
         element.dataset.cmsEditable = "image";
@@ -862,6 +876,11 @@ export function CmsEditor() {
       else next[collection.id] = items;
       return next;
     });
+    const doc = frameRef.current?.contentDocument;
+    if (doc && renderCurrentWorkPreview(doc, items, collection)) {
+      window.clearTimeout(previewAttachTimerRef.current);
+      previewAttachTimerRef.current = window.setTimeout(() => attachPreviewRef.current(), 0);
+    }
     showToast(message);
   }
 
@@ -902,7 +921,7 @@ export function CmsEditor() {
   function removeWorkItem(index: number) {
     const items = currentWorkItems();
     const item = items[index];
-    if (!item || !window.confirm(`Remove “${item.name}” from Current work?`)) return;
+    if (!item) return;
     updateCurrentWork(
       items.filter((_, itemIndex) => itemIndex !== index),
       "Work entry removed from draft",
@@ -1260,6 +1279,10 @@ export function CmsEditor() {
                       </li>
                     ))}
                   </ol>
+                  <p className="cms-content-manager__note">
+                    Draft additions and removals appear in the preview immediately. Publish to make
+                    them public; use Discard draft to undo.
+                  </p>
                 </section>
 
                 <section aria-labelledby="writing-manager-title">
@@ -1480,7 +1503,7 @@ export function CmsEditor() {
                 <X size={17} />
               </button>
             </header>
-            <p>The entry is added to your draft. Review it, then publish the site.</p>
+            <p>The entry appears in the preview as a draft. Publish to make it public.</p>
             <div className="cms-page-form cms-work-form">
               <label>
                 <span>Name</span>
@@ -1927,6 +1950,62 @@ function normalizeWorkItems(value: unknown): WorkItem[] {
       },
     ];
   });
+}
+
+function renderCurrentWorkPreview(
+  doc: Document,
+  items: WorkItem[],
+  collection: CmsCollection,
+): boolean {
+  const list = doc.querySelector<HTMLOListElement>(".work-list");
+  if (!list || !collection.fragmentId) return false;
+
+  const region = (element: HTMLElement, index: number, field: "name" | "role" | "description") => {
+    element.dataset.usableCmsRegion = `home.work.${index}.${field}`;
+    element.dataset.usableCmsKind = "text";
+    element.dataset.usableCmsLabel = `Work ${index + 1} ${field}`;
+    element.dataset.usableCmsPath = `selectedWork.${index}.${field}`;
+    element.dataset.usableCmsFragmentId = collection.fragmentId || "";
+  };
+
+  const rows = items.map((item, index) => {
+    const row = doc.createElement("li");
+    row.dataset.accent = item.accent;
+
+    const link = doc.createElement("a");
+    link.href = item.href;
+
+    const number = doc.createElement("span");
+    number.className = "work-list__number";
+    number.textContent = String(index + 1).padStart(2, "0");
+
+    const title = doc.createElement("div");
+    title.className = "work-list__title";
+    const name = doc.createElement("h3");
+    name.textContent = item.name;
+    region(name, index, "name");
+    const role = doc.createElement("p");
+    role.textContent = item.role;
+    region(role, index, "role");
+    title.append(name, role);
+
+    const description = doc.createElement("p");
+    description.className = "work-list__description";
+    description.textContent = item.description;
+    region(description, index, "description");
+
+    const arrow = doc.createElement("span");
+    arrow.className = "work-list__arrow";
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.textContent = "↗";
+
+    link.append(number, title, description, arrow);
+    row.append(link);
+    return row;
+  });
+
+  list.replaceChildren(...rows);
+  return true;
 }
 
 function messageFrom(error: unknown): string {

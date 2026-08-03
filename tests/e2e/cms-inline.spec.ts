@@ -181,9 +181,20 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await newWorkDialog.getByLabel("Link").fill("https://example.com/");
   await newWorkDialog.getByRole("button", { name: "Add to draft" }).click();
   await expect(currentWorkManager.getByText("Example Project", { exact: true })).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
+  await expect(
+    preview.locator(".work-list").getByText("Example Project", { exact: true }),
+  ).toBeVisible();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText(
+    "Example Project",
+  );
   await currentWorkManager.getByRole("button", { name: "Remove Usable from Current work" }).click();
   await expect(currentWorkManager.getByText("Usable", { exact: true })).not.toBeVisible();
+  await expect(
+    preview.locator(".work-list").getByText("Usable", { exact: true }),
+  ).not.toBeVisible();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 1 name" })).toHaveText(
+    "University of the Faroe Islands",
+  );
   await expect
     .poll(() =>
       page.evaluate(() => {
