@@ -116,6 +116,54 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await expect(page.locator(".cms-preview--mobile")).toBeVisible();
   await expect(page.locator(".cms-preview--mobile")).toHaveCSS("width", "390px");
 
+  await page.getByRole("button", { name: "Content" }).click();
+  const currentWorkManager = page.getByRole("region", { name: "Current work" });
+  const writingManager = page.getByRole("region", { name: "Writing" });
+  await expect(currentWorkManager.getByText("Usable", { exact: true })).toBeVisible();
+  await currentWorkManager.getByRole("button", { name: "Add" }).click();
+  const newWorkDialog = page.getByRole("dialog", { name: "Add Current work" });
+  await newWorkDialog.getByLabel("Name").fill("Example Project");
+  await newWorkDialog.getByLabel("Role").fill("Advisor");
+  await newWorkDialog.getByLabel("Description").fill("A new long-horizon project.");
+  await newWorkDialog.getByLabel("Link").fill("https://example.com/");
+  await newWorkDialog.getByRole("button", { name: "Add to draft" }).click();
+  await expect(currentWorkManager.getByText("Example Project", { exact: true })).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await currentWorkManager.getByRole("button", { name: "Remove Usable from Current work" }).click();
+  await expect(currentWorkManager.getByText("Usable", { exact: true })).not.toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const calls = (
+          window as Window & {
+            __cmsCalls?: Array<{
+              operation: string;
+              input?: { changes?: Array<{ afterRef?: string; path?: string }> };
+            }>;
+          }
+        ).__cmsCalls;
+        const change = calls
+          ?.filter((call) => call.operation === "draft")
+          .flatMap((call) => call.input?.changes || [])
+          .reverse()
+          .find((candidate) => candidate.path === "selectedWork");
+        if (!change?.afterRef) return false;
+        const items = JSON.parse(change.afterRef) as Array<{ name?: string }>;
+        return (
+          items.some((item) => item.name === "Example Project") &&
+          !items.some((item) => item.name === "Usable")
+        );
+      }),
+    )
+    .toBe(true);
+  await expect(writingManager.getByRole("button", { name: "Add" })).toBeVisible();
+  await expect(
+    writingManager.getByRole("button", { name: "Hide Why I am writing here from Writing" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close panel" }).click();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByText("Published", { exact: true }).first()).toBeVisible();
+
   await page.getByRole("button", { name: "Pages" }).click();
   await expect(page.getByRole("navigation", { name: "Website pages" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New founder note" })).toBeVisible();
@@ -175,4 +223,9 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
     "aria-multiline",
     "true",
   );
+
+  await page.goto("http://localhost:3000/?cms=1");
+  const homePreview = page.frameLocator('iframe[title="Home inline editor"]');
+  await homePreview.getByRole("link", { name: "All writing" }).click();
+  await expect(page).toHaveURL(/\/writing\?cms=1$/);
 });

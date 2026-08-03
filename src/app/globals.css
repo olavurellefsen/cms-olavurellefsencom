@@ -1861,6 +1861,120 @@ html.cms-editing body > .site-footer {
   gap: 10px;
 }
 
+.cms-content-manager {
+  display: grid;
+  gap: 26px;
+}
+
+.cms-content-manager > section {
+  display: grid;
+  gap: 11px;
+}
+
+.cms-content-manager > section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cms-content-manager h3 {
+  margin: 2px 0 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.cms-collection-add {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid #b8c6c1;
+  border-radius: 4px;
+  background: #fff;
+  color: #193630;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.cms-collection-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-collection-list li {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 7px 7px 11px;
+  border: 1px solid #d3dcd8;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.cms-collection-list li > span,
+.cms-collection-open span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.cms-collection-list strong,
+.cms-collection-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cms-collection-list strong {
+  color: #263330;
+  font-size: 12px;
+}
+
+.cms-collection-list small {
+  color: #71807b;
+  font-size: 10px;
+}
+
+.cms-collection-list li > button {
+  width: 38px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d3dcd8;
+  border-radius: 4px;
+  background: #fff;
+  color: #9f3f35;
+  cursor: pointer;
+}
+
+.cms-collection-list li > .cms-collection-open {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  border: 0;
+  color: inherit;
+}
+
+.cms-content-manager__note {
+  margin: 0;
+  color: #71807b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .cms-page-list button,
 .cms-version-list > div {
   width: 100%;
@@ -2222,6 +2336,14 @@ html.cms-inline-preview [contenteditable="true"]:focus {
   margin-block: 22px;
 }
 
+.cms-work-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cms-work-form__wide {
+  grid-column: 1 / -1;
+}
+
 .cms-page-form label {
   display: grid;
   gap: 7px;
@@ -2230,6 +2352,7 @@ html.cms-inline-preview [contenteditable="true"]:focus {
 }
 
 .cms-page-form input,
+.cms-page-form select,
 .cms-page-form textarea,
 .cms-chat textarea {
   width: 100%;
@@ -2242,6 +2365,11 @@ html.cms-inline-preview [contenteditable="true"]:focus {
   font-weight: 500;
   line-height: 1.45;
   padding: 10px 12px;
+}
+
+.cms-page-form select {
+  min-height: 44px;
+  padding: 0 12px;
 }
 
 .cms-page-form small {

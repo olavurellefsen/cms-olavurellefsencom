@@ -5,6 +5,7 @@ import {
   ExternalLink,
   History,
   ImageUp,
+  ListPlus,
   LoaderCircle,
   LogIn,
   MessageSquare,
@@ -35,11 +36,20 @@ type CmsRegion = {
   path?: string;
 };
 
+type CmsCollection = {
+  fragmentId?: string;
+  id: string;
+  label?: string;
+  pageId?: string;
+  path: string;
+  scope?: "global" | "page";
+};
+
 type CmsManifest = {
   siteId: string;
   workspaceId: string;
   regions: CmsRegion[];
-  collections?: Array<Record<string, unknown>>;
+  collections?: CmsCollection[];
   pages?: CmsPageReference[];
   pageTemplates?: CmsPageTemplate[];
 };
@@ -69,6 +79,16 @@ type CmsChange = {
   targetId: string;
   path: string;
   afterRef: string;
+};
+
+type CmsDirtyValue = string | Array<Record<string, unknown>>;
+
+type WorkItem = {
+  accent: "coral" | "blue" | "green" | "yellow";
+  description: string;
+  href: string;
+  name: string;
+  role: string;
 };
 
 type CmsRevision = { id: string };
@@ -132,7 +152,7 @@ const fallbackPages: CmsPageReference[] = [
 
 type EditorStatus = "checking" | "signed-out" | "unauthorized" | "ready" | "error";
 type SaveStatus = "published" | "changed" | "saving" | "saved" | "publishing" | "error";
-type Drawer = "pages" | "history" | "settings" | null;
+type Drawer = "content" | "pages" | "history" | "settings" | null;
 type CmsViewport = "desktop" | "tablet" | "mobile";
 
 type ChatEntry = { id: string; role: "assistant" | "user"; text: string; ok?: boolean };
@@ -145,6 +165,8 @@ type NewPageDraft = {
   topics: string;
 };
 
+type NewWorkDraft = WorkItem;
+
 export function CmsEditor() {
   const [active, setActive] = useState(false);
   const [pageId, setPageId] = useState("home");
@@ -156,7 +178,7 @@ export function CmsEditor() {
   const [managedPages, setManagedPages] = useState<CmsPageReference[]>(fallbackPages);
   const [fragments, setFragments] = useState<Record<string, Record<string, unknown>>>({});
   const [registry, setRegistry] = useState<Record<string, CmsRegion>>({});
-  const [dirty, setDirty] = useState<Record<string, string>>({});
+  const [dirty, setDirty] = useState<Record<string, CmsDirtyValue>>({});
   const [revisionId, setRevisionId] = useState<string>();
   const [versions, setVersions] = useState<CmsVersion[]>([]);
   const [drawer, setDrawer] = useState<Drawer>(null);
@@ -168,8 +190,10 @@ export function CmsEditor() {
   const [error, setError] = useState("");
   const [loadNonce, setLoadNonce] = useState(0);
   const [newPageOpen, setNewPageOpen] = useState(false);
+  const [newWorkOpen, setNewWorkOpen] = useState(false);
   const [pageOperation, setPageOperation] = useState<"creating" | "hiding" | null>(null);
   const [newPage, setNewPage] = useState<NewPageDraft>(() => emptyNewPage());
+  const [newWork, setNewWork] = useState<NewWorkDraft>(() => emptyNewWork());
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -261,9 +285,15 @@ export function CmsEditor() {
         const localManifest = (await manifestResponse.json()) as CmsManifest;
         const fragmentIds = Array.from(
           new Set(
-            localManifest.regions
-              .filter((region) => region.scope === "global" || region.pageId === pageId)
-              .map((region) => region.fragmentId)
+            [
+              ...localManifest.regions.filter(
+                (region) => region.scope === "global" || region.pageId === pageId,
+              ),
+              ...(localManifest.collections || []).filter(
+                (collection) => collection.id === "home.selectedWork",
+              ),
+            ]
+              .map((region) => region.fragmentId as string | undefined)
               .filter((id): id is string => Boolean(id)),
           ),
         );
@@ -298,7 +328,7 @@ export function CmsEditor() {
         draftKeyRef.current = `usable-cms:draft:${nextManifest.siteId}:${pageId}`;
         const savedDraft = window.localStorage.getItem(draftKeyRef.current);
         if (savedDraft) {
-          const parsedDraft = JSON.parse(savedDraft) as Record<string, string>;
+          const parsedDraft = JSON.parse(savedDraft) as Record<string, CmsDirtyValue>;
           setDirty(parsedDraft);
           setSaveStatus(Object.keys(parsedDraft).length ? "changed" : "published");
         } else {
@@ -336,7 +366,7 @@ export function CmsEditor() {
             kind: "fragment" as const,
             targetId: region.fragmentId,
             path: region.path,
-            afterRef: JSON.stringify(value),
+            afterRef: JSON.stringify(value) ?? "null",
           };
         })
         .filter((change): change is CmsChange => Boolean(change)),
@@ -405,7 +435,10 @@ export function CmsEditor() {
   updateRegionRef.current = updateRegion;
 
   function valueForRegion(region: CmsRegion): string {
-    return dirty[region.id] ?? readPath(fragments[region.fragmentId || ""], region.path || "");
+    const draftValue = dirty[region.id];
+    return typeof draftValue === "string"
+      ? draftValue
+      : readPath(fragments[region.fragmentId || ""], region.path || "");
   }
 
   const applyValueToPreview = useCallback((region: CmsRegion, value: string) => {
@@ -428,7 +461,7 @@ export function CmsEditor() {
   useEffect(() => {
     for (const [regionId, value] of Object.entries(dirty)) {
       const region = registry[regionId];
-      if (region) applyValueToPreview(region, value);
+      if (region && typeof value === "string") applyValueToPreview(region, value);
     }
   }, [applyValueToPreview, dirty, registry]);
 
@@ -447,13 +480,20 @@ export function CmsEditor() {
     const cleanups: Array<() => void> = [];
     const runtimeRegions: Record<string, CmsRegion> = {};
 
-    const blockNavigation = (event: Event) => {
+    const handlePreviewNavigation = (event: Event) => {
       const target = event.target as Element | null;
-      if (!target?.closest("a")) return;
+      const anchor = target?.closest("a");
+      if (!anchor) return;
       event.preventDefault();
+      const containsEditableRegion =
+        anchor.matches("[data-usable-cms-region]") ||
+        Boolean(anchor.querySelector("[data-usable-cms-region]"));
+      if (containsEditableRegion) return;
+      const destination = new URL(anchor.getAttribute("href") || "", doc.location.href);
+      if (destination.origin === doc.location.origin) navigateToPage(destination.pathname);
     };
-    doc.addEventListener("click", blockNavigation, true);
-    cleanups.push(() => doc.removeEventListener("click", blockNavigation, true));
+    doc.addEventListener("click", handlePreviewNavigation, true);
+    cleanups.push(() => doc.removeEventListener("click", handlePreviewNavigation, true));
 
     for (const element of doc.querySelectorAll<HTMLElement>("[data-usable-cms-region]")) {
       const id = element.dataset.usableCmsRegion;
@@ -478,7 +518,7 @@ export function CmsEditor() {
         element.setAttribute("role", "button");
         element.setAttribute("aria-label", `Edit ${region.label}`);
         element.parentElement?.classList.add("cms-image-region");
-        if (liveValue) element.src = liveValue;
+        if (typeof liveValue === "string" && liveValue) element.src = liveValue;
 
         const selectImage = (event: Event) => {
           event.preventDefault();
@@ -505,7 +545,8 @@ export function CmsEditor() {
       element.setAttribute("role", "textbox");
       element.setAttribute("aria-label", `Edit ${region.label}`);
       element.setAttribute("aria-multiline", region.path === "bodyMarkdown" ? "true" : "false");
-      if (liveValue && region.path !== "bodyMarkdown") setEditableText(element, liveValue);
+      if (typeof liveValue === "string" && liveValue && region.path !== "bodyMarkdown")
+        setEditableText(element, liveValue);
 
       const readValue = () => editableValue(element, region, turndownRef.current);
       const focus = () => {
@@ -785,6 +826,89 @@ export function CmsEditor() {
     }
   }
 
+  function selectedWorkCollection() {
+    return manifest?.collections?.find((collection) => collection.id === "home.selectedWork");
+  }
+
+  function currentWorkItems(): WorkItem[] {
+    const collection = selectedWorkCollection();
+    if (!collection?.fragmentId) return [];
+    const draftValue = dirty[collection.id];
+    const value = Array.isArray(draftValue)
+      ? draftValue
+      : readPathValue(fragments[collection.fragmentId], collection.path);
+    return normalizeWorkItems(value);
+  }
+
+  function updateCurrentWork(items: WorkItem[], message: string) {
+    const collection = selectedWorkCollection();
+    if (!collection?.fragmentId) {
+      setError("The Current work collection is not available in this CMS manifest.");
+      return;
+    }
+    registerRegion({
+      id: collection.id,
+      kind: "text",
+      label: collection.label || "Current work",
+      path: collection.path,
+      fragmentId: collection.fragmentId,
+      pageId: collection.pageId,
+      scope: collection.scope,
+    });
+    const baseline = readPathValue(fragments[collection.fragmentId], collection.path);
+    setDirty((current) => {
+      const next = { ...current };
+      if (sameValue(items, baseline)) delete next[collection.id];
+      else next[collection.id] = items;
+      return next;
+    });
+    showToast(message);
+  }
+
+  function addWorkItem() {
+    if (
+      !newWork.name.trim() ||
+      !newWork.role.trim() ||
+      !newWork.description.trim() ||
+      !newWork.href.trim()
+    ) {
+      setError("Name, role, description, and link are required.");
+      return;
+    }
+    try {
+      new URL(newWork.href);
+    } catch {
+      setError("Enter a complete work link, including https://.");
+      return;
+    }
+    updateCurrentWork(
+      [
+        ...currentWorkItems(),
+        {
+          ...newWork,
+          name: newWork.name.trim(),
+          role: newWork.role.trim(),
+          description: newWork.description.trim(),
+          href: newWork.href.trim(),
+        },
+      ],
+      "Work entry added to draft",
+    );
+    setNewWork(emptyNewWork());
+    setNewWorkOpen(false);
+    setError("");
+  }
+
+  function removeWorkItem(index: number) {
+    const items = currentWorkItems();
+    const item = items[index];
+    if (!item || !window.confirm(`Remove “${item.name}” from Current work?`)) return;
+    updateCurrentWork(
+      items.filter((_, itemIndex) => itemIndex !== index),
+      "Work entry removed from draft",
+    );
+  }
+
   async function sendChat() {
     const broker = brokerRef.current;
     const message = chatMessage.trim();
@@ -910,6 +1034,8 @@ export function CmsEditor() {
       !region.path.includes("*") &&
       ["siteDescription"].includes(region.path),
   );
+  const workItems = currentWorkItems();
+  const writingPages = managedPages.filter((page) => page.path.startsWith("/writing/"));
 
   return (
     <main className="cms-workspace" aria-label="Usable CMS inline editor">
@@ -936,6 +1062,18 @@ export function CmsEditor() {
             title="Pages"
           >
             <PanelLeft size={17} /> <span>Pages</span>
+          </button>
+          <button
+            type="button"
+            className="cms-tool-button"
+            aria-pressed={drawer === "content"}
+            onClick={() => {
+              setDrawer((current) => (current === "content" ? null : "content"));
+              setSelectedRegionId(undefined);
+            }}
+            title="Manage Current work and Writing"
+          >
+            <ListPlus size={17} /> <span>Content</span>
           </button>
           <ViewportSwitcher viewport={viewport} onChange={setViewport} />
           <button
@@ -1054,7 +1192,13 @@ export function CmsEditor() {
             <div>
               <span className="cms-kicker">Usable CMS</span>
               <h2>
-                {drawer === "pages" ? "Pages" : drawer === "history" ? "History" : "Site settings"}
+                {drawer === "content"
+                  ? "Content"
+                  : drawer === "pages"
+                    ? "Pages"
+                    : drawer === "history"
+                      ? "History"
+                      : "Site settings"}
               </h2>
             </div>
             <button
@@ -1072,6 +1216,93 @@ export function CmsEditor() {
               <p className="cms-editor__error" role="alert">
                 {error}
               </p>
+            ) : null}
+            {drawer === "content" ? (
+              <div className="cms-content-manager">
+                <section aria-labelledby="current-work-manager-title">
+                  <header>
+                    <div>
+                      <span className="cms-kicker">Homepage</span>
+                      <h3 id="current-work-manager-title">Current work</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="cms-collection-add"
+                      onClick={() => {
+                        setError("");
+                        setNewWorkOpen(true);
+                      }}
+                    >
+                      <Plus size={15} /> Add
+                    </button>
+                  </header>
+                  <ol className="cms-collection-list">
+                    {workItems.map((item, index) => (
+                      <li key={`${item.name}-${index}`}>
+                        <span>
+                          <strong>{item.name}</strong>
+                          <small>{item.role}</small>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeWorkItem(index)}
+                          aria-label={`Remove ${item.name} from Current work`}
+                          title="Remove from Current work"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+
+                <section aria-labelledby="writing-manager-title">
+                  <header>
+                    <div>
+                      <span className="cms-kicker">Homepage and Writing</span>
+                      <h3 id="writing-manager-title">Writing</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="cms-collection-add"
+                      onClick={() => {
+                        setError("");
+                        setNewPageOpen(true);
+                      }}
+                    >
+                      <Plus size={15} /> Add
+                    </button>
+                  </header>
+                  <ol className="cms-collection-list">
+                    {writingPages.map((page) => (
+                      <li key={page.id}>
+                        <button
+                          type="button"
+                          className="cms-collection-open"
+                          onClick={() => navigateToPage(page.path)}
+                        >
+                          <span>
+                            <strong>{page.title}</strong>
+                            <small>{page.path}</small>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void hidePage(page)}
+                          disabled={pageOperation !== null || !page.fragmentId}
+                          aria-label={`Hide ${page.title} from Writing`}
+                          title="Hide page and retain its CMS fragment"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="cms-content-manager__note">
+                    Removing writing hides the page from the public site and keeps its CMS fragment.
+                  </p>
+                </section>
+              </div>
             ) : null}
             {drawer === "pages" ? (
               <>
@@ -1219,6 +1450,108 @@ export function CmsEditor() {
             ))}
           </div>
         </aside>
+      ) : null}
+
+      {newWorkOpen ? (
+        <div className="cms-modal-backdrop" role="presentation">
+          <section
+            className="cms-page-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-work-title"
+          >
+            <header>
+              <div>
+                <span className="cms-kicker">Homepage collection</span>
+                <h2 id="new-work-title">Add Current work</h2>
+              </div>
+              <button
+                type="button"
+                className="cms-icon-button"
+                onClick={() => setNewWorkOpen(false)}
+                aria-label="Close new work dialog"
+              >
+                <X size={17} />
+              </button>
+            </header>
+            <p>The entry is added to your draft. Review it, then publish the site.</p>
+            <div className="cms-page-form cms-work-form">
+              <label>
+                <span>Name</span>
+                <input
+                  value={newWork.name}
+                  onChange={(event) =>
+                    setNewWork((current) => ({ ...current, name: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Role</span>
+                <input
+                  value={newWork.role}
+                  onChange={(event) =>
+                    setNewWork((current) => ({ ...current, role: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="cms-work-form__wide">
+                <span>Description</span>
+                <textarea
+                  rows={3}
+                  value={newWork.description}
+                  onChange={(event) =>
+                    setNewWork((current) => ({ ...current, description: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Link</span>
+                <input
+                  type="url"
+                  placeholder="https://"
+                  value={newWork.href}
+                  onChange={(event) =>
+                    setNewWork((current) => ({ ...current, href: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Accent</span>
+                <select
+                  value={newWork.accent}
+                  onChange={(event) =>
+                    setNewWork((current) => ({
+                      ...current,
+                      accent: event.target.value as WorkItem["accent"],
+                    }))
+                  }
+                >
+                  <option value="coral">Coral</option>
+                  <option value="blue">Blue</option>
+                  <option value="green">Green</option>
+                  <option value="yellow">Yellow</option>
+                </select>
+              </label>
+            </div>
+            {error ? (
+              <p className="cms-editor__error" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <footer>
+              <button
+                type="button"
+                className="cms-secondary-button"
+                onClick={() => setNewWorkOpen(false)}
+              >
+                Cancel
+              </button>
+              <button type="button" className="cms-primary-button" onClick={addWorkItem}>
+                <Plus size={16} /> Add to draft
+              </button>
+            </footer>
+          </section>
+        </div>
       ) : null}
 
       {newPageOpen ? (
@@ -1531,18 +1864,23 @@ function parseContent(content: unknown): Record<string, unknown> {
 }
 
 function readPath(content: Record<string, unknown> | undefined, path: string): string {
+  const value = readPathValue(content, path);
+  return typeof value === "string" ? value : value == null ? "" : JSON.stringify(value);
+}
+
+function readPathValue(content: Record<string, unknown> | undefined, path: string): unknown {
   let value: unknown = content;
   for (const part of path.split(".")) {
     if (!value || typeof value !== "object") return "";
     value = (value as Record<string, unknown>)[part];
   }
-  return typeof value === "string" ? value : value == null ? "" : JSON.stringify(value);
+  return value;
 }
 
 function writePath(
   content: Record<string, unknown> | undefined,
   path: string,
-  value: string,
+  value: unknown,
 ): Record<string, unknown> {
   const root = structuredClone(content || {});
   const parts = path.split(".");
@@ -1554,6 +1892,35 @@ function writePath(
   }
   target[parts.at(-1) || path] = value;
   return root;
+}
+
+function sameValue(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function normalizeWorkItems(value: unknown): WorkItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    if (
+      typeof record.name !== "string" ||
+      typeof record.role !== "string" ||
+      typeof record.description !== "string" ||
+      typeof record.href !== "string" ||
+      !["coral", "blue", "green", "yellow"].includes(String(record.accent))
+    )
+      return [];
+    return [
+      {
+        name: record.name,
+        role: record.role,
+        description: record.description,
+        href: record.href,
+        accent: record.accent as WorkItem["accent"],
+      },
+    ];
+  });
 }
 
 function messageFrom(error: unknown): string {
@@ -1610,6 +1977,16 @@ function emptyNewPage(): NewPageDraft {
     summary: "",
     title: "",
     topics: "Usable",
+  };
+}
+
+function emptyNewWork(): NewWorkDraft {
+  return {
+    accent: "coral",
+    description: "",
+    href: "https://",
+    name: "",
+    role: "",
   };
 }
 
