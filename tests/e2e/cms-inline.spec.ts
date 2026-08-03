@@ -14,6 +14,55 @@ const fragments = {
   ),
 };
 
+test("CMS can refresh an expired Usable login", async ({ page }) => {
+  await page.route("**/broker.js", async (route) => {
+    await route.fulfill({
+      contentType: "application/javascript",
+      body: `
+        window.__cmsCalls = [];
+        window.usableCmsBroker = {
+          session: async () => ({
+            signedIn: true,
+            authorized: false,
+            user: { email: "olavur@ellefsen.fo" },
+            capabilities: {}
+          }),
+          login: async (returnTo, options) => {
+            window.__cmsCalls.push({ operation: "login", returnTo, options });
+          }
+        };
+      `,
+    });
+  });
+
+  await page.goto("http://localhost:3000/?cms=1");
+  await expect(
+    page.getByText("Your Usable login may have expired. Sign in again to refresh access.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Sign in again" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as Window & {
+            __cmsCalls?: Array<{
+              operation: string;
+              options?: { forceLogin?: boolean; sameTab?: boolean };
+            }>;
+          }
+        ).__cmsCalls?.some(
+          (call) =>
+            call.operation === "login" &&
+            call.options?.forceLogin === true &&
+            call.options?.sameTab === true,
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
 test("CMS edits the real page inline and preserves broker workflows", async ({
   page,
 }, testInfo) => {

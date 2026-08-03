@@ -96,7 +96,7 @@ type CmsVersion = { id: string; createdAt?: string; summary?: string };
 
 type CmsBroker = {
   session(): Promise<CmsSession>;
-  login(returnTo: string, options: { sameTab: true }): Promise<unknown>;
+  login(returnTo: string, options: { forceLogin?: boolean; sameTab: true }): Promise<unknown>;
   content(input: { fragmentIds?: string[]; workspaceId?: string }): Promise<{
     fragments: Array<{ id: string; content: unknown }>;
     manifest?: CmsManifest;
@@ -1001,17 +1001,23 @@ export function CmsEditor() {
             : status === "signed-out"
               ? "Sign in with Usable to edit this website."
               : status === "unauthorized"
-                ? "This Usable account does not have access to edit the website."
+                ? "Your Usable login may have expired. Sign in again to refresh access."
                 : error}
         </p>
         <div className="cms-gate__actions">
-          {status === "signed-out" ? (
+          {status === "signed-out" || status === "unauthorized" ? (
             <button
               type="button"
               className="cms-primary-button"
-              onClick={() => void brokerRef.current?.login(window.location.href, { sameTab: true })}
+              onClick={() =>
+                void brokerRef.current?.login(window.location.href, {
+                  forceLogin: status === "unauthorized",
+                  sameTab: true,
+                })
+              }
             >
-              <LogIn size={18} /> Sign in with Usable
+              <LogIn size={18} />
+              {status === "unauthorized" ? "Sign in again" : "Sign in with Usable"}
             </button>
           ) : null}
           <button
