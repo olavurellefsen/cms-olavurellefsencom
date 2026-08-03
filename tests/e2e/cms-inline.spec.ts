@@ -207,6 +207,14 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await expect(
     preview.locator(".work-list").getByText("Usable", { exact: true }),
   ).not.toBeVisible();
+  const removalToast = page.locator(".cms-toast--action");
+  await expect(removalToast).toContainText("Removed Usable from draft");
+  await removalToast.getByRole("button", { name: "Undo" }).click();
+  await expect(preview.locator(".work-list").getByText("Usable", { exact: true })).toBeVisible();
+  await preview.getByRole("button", { name: "Remove Usable from Current work" }).click();
+  await expect(
+    preview.locator(".work-list").getByText("Usable", { exact: true }),
+  ).not.toBeVisible();
   await expect(preview.getByRole("textbox", { name: "Edit Work 1 name" })).toHaveText(
     "University of the Faroe Islands",
   );

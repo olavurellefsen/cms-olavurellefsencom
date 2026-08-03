@@ -169,6 +169,11 @@ type NewPageDraft = {
 
 type NewWorkDraft = WorkItem;
 
+type WorkRemovalUndo = {
+  index: number;
+  item: WorkItem;
+};
+
 export function CmsEditor() {
   const [active, setActive] = useState(false);
   const [pageId, setPageId] = useState("home");
@@ -196,6 +201,7 @@ export function CmsEditor() {
   const [pageOperation, setPageOperation] = useState<"creating" | "hiding" | null>(null);
   const [newPage, setNewPage] = useState<NewPageDraft>(() => emptyNewPage());
   const [newWork, setNewWork] = useState<NewWorkDraft>(() => emptyNewWork());
+  const [workRemovalUndo, setWorkRemovalUndo] = useState<WorkRemovalUndo | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -213,6 +219,7 @@ export function CmsEditor() {
   const previewCleanupRef = useRef<() => void>(() => undefined);
   const attachPreviewRef = useRef<() => void>(() => undefined);
   const previewAttachTimerRef = useRef<number | undefined>(undefined);
+  const workRemovalUndoTimerRef = useRef<number | undefined>(undefined);
   const previewLoadedAtRef = useRef(0);
   const dirtyRef = useRef(dirty);
   const fragmentsRef = useRef(fragments);
@@ -685,6 +692,7 @@ export function CmsEditor() {
   useEffect(
     () => () => {
       window.clearTimeout(previewAttachTimerRef.current);
+      window.clearTimeout(workRemovalUndoTimerRef.current);
       previewCleanupRef.current();
     },
     [],
@@ -730,6 +738,7 @@ export function CmsEditor() {
       window.localStorage.removeItem(draftKeyRef.current);
       setDirty({});
       setRevisionId(undefined);
+      clearWorkRemovalUndo();
       setSaveStatus("published");
       showToast("Site published");
     } catch (nextError) {
@@ -804,6 +813,7 @@ export function CmsEditor() {
     setRevisionId(undefined);
     setError("");
     setSelectedRegionId(undefined);
+    clearWorkRemovalUndo();
     setPreviewNonce((current) => current + 1);
     showToast("Draft discarded");
   }
@@ -951,6 +961,7 @@ export function CmsEditor() {
       setError("Enter a complete work link, including https://.");
       return;
     }
+    clearWorkRemovalUndo();
     updateCurrentWork(
       [
         ...currentWorkItemsFromRefs(),
@@ -975,17 +986,41 @@ export function CmsEditor() {
     const items = currentWorkItemsFromRefs();
     const item = items[index];
     if (!item) return;
+    clearWorkRemovalUndo();
+    setToast("");
+    setWorkRemovalUndo({ index, item });
+    workRemovalUndoTimerRef.current = window.setTimeout(() => {
+      setWorkRemovalUndo(null);
+      workRemovalUndoTimerRef.current = undefined;
+    }, 6000);
     setSelectedRegionId(undefined);
     updateCurrentWork(
       items.filter((_, itemIndex) => itemIndex !== index),
-      `Removed ${item.name} from draft`,
+      "",
     );
+  }
+
+  function undoWorkItemRemoval() {
+    if (!workRemovalUndo) return;
+    const { index, item } = workRemovalUndo;
+    const items = currentWorkItemsFromRefs();
+    items.splice(Math.min(index, items.length), 0, item);
+    clearWorkRemovalUndo();
+    updateCurrentWork(items, `Restored ${item.name}`);
+    window.setTimeout(() => focusCurrentWorkItem(Math.min(index, items.length - 1)), 80);
+  }
+
+  function clearWorkRemovalUndo() {
+    window.clearTimeout(workRemovalUndoTimerRef.current);
+    workRemovalUndoTimerRef.current = undefined;
+    setWorkRemovalUndo(null);
   }
 
   function moveWorkItem(index: number, direction: -1 | 1) {
     const items = currentWorkItemsFromRefs();
     const targetIndex = index + direction;
     if (!items[index] || !items[targetIndex]) return;
+    clearWorkRemovalUndo();
     [items[index], items[targetIndex]] = [items[targetIndex], items[index]];
     setSelectedRegionId(undefined);
     updateCurrentWork(items, `Moved ${items[targetIndex].name} ${direction < 0 ? "up" : "down"}`);
@@ -1062,6 +1097,7 @@ export function CmsEditor() {
   }
 
   function showToast(message: string) {
+    if (!message) return;
     setToast(message);
     window.setTimeout(() => setToast(""), 2600);
   }
@@ -1841,7 +1877,14 @@ export function CmsEditor() {
           {error}
         </p>
       ) : null}
-      {toast ? (
+      {workRemovalUndo ? (
+        <output className="cms-toast cms-toast--action" aria-live="polite">
+          <span>Removed {workRemovalUndo.item.name} from draft</span>
+          <button type="button" onClick={undoWorkItemRemoval}>
+            <Undo2 size={15} /> Undo
+          </button>
+        </output>
+      ) : toast ? (
         <output className="cms-toast" aria-live="polite">
           {toast}
         </output>

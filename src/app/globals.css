@@ -2082,6 +2082,27 @@ html.cms-editing body > .site-footer {
   bottom: 16px;
 }
 
+.cms-toast--action {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.cms-toast--action button {
+  min-height: 36px;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid #6fab8a;
+  border-radius: 4px;
+  background: #fff;
+  color: #175a3a;
+  font: inherit;
+  font-weight: 780;
+  cursor: pointer;
+}
+
 /* These rules run inside the same-origin public-page preview iframe. */
 html.cms-inline-preview [data-cms-editable="text"] {
   position: relative;
