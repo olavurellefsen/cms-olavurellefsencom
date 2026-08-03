@@ -187,6 +187,16 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText(
     "Example Project",
   );
+
+  await page.reload();
+  await expect(page.getByRole("main", { name: "Usable CMS inline editor" })).toBeVisible();
+  await expect(
+    preview.locator(".work-list").getByText("Example Project", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Content" }).click();
+  await expect(currentWorkManager.getByText("Example Project", { exact: true })).toBeVisible();
+
   await currentWorkManager.getByRole("button", { name: "Remove Usable from Current work" }).click();
   await expect(currentWorkManager.getByText("Usable", { exact: true })).not.toBeVisible();
   await expect(

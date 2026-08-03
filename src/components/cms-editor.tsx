@@ -318,13 +318,7 @@ export function CmsEditor() {
         const matchedPage = nextPages.find((page) => page.path === window.location.pathname);
         if (matchedPage && matchedPage.id !== pageId) setPageId(matchedPage.id);
         setFragments(nextFragments);
-        setRegistry(
-          Object.fromEntries(
-            nextManifest.regions
-              .filter((region) => region.path && region.fragmentId && !region.path.includes("*"))
-              .map((region) => [region.id, region]),
-          ),
-        );
+        setRegistry(registryFromManifest(nextManifest, pageId));
         draftKeyRef.current = `usable-cms:draft:${nextManifest.siteId}:${pageId}`;
         const savedDraft = window.localStorage.getItem(draftKeyRef.current);
         if (savedDraft) {
@@ -2053,6 +2047,32 @@ function mergeManifests(local: CmsManifest, remote: CmsManifest): CmsManifest {
     pages: normalizeManagedPages(remote.pages, local.pages || []),
     pageTemplates: remote.pageTemplates?.length ? remote.pageTemplates : local.pageTemplates,
   };
+}
+
+function registryFromManifest(manifest: CmsManifest, pageId: string): Record<string, CmsRegion> {
+  const scalarRegions = manifest.regions.filter(
+    (region) =>
+      region.path &&
+      region.fragmentId &&
+      !region.path.includes("*") &&
+      (region.scope === "global" || !region.pageId || region.pageId === pageId),
+  );
+  const collectionRegions: CmsRegion[] = (manifest.collections || [])
+    .filter(
+      (collection) =>
+        collection.path &&
+        collection.fragmentId &&
+        (collection.scope === "global" || !collection.pageId || collection.pageId === pageId),
+    )
+    .map((collection) => ({
+      ...collection,
+      kind: "text",
+      label: collection.label || collection.id,
+    }));
+
+  return Object.fromEntries(
+    [...scalarRegions, ...collectionRegions].map((region) => [region.id, region]),
+  );
 }
 
 function emptyNewPage(): NewPageDraft {
