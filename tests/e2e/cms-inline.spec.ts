@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import manifest from "../../cms/manifest.json" with { type: "json" };
 import binding from "../../cms/site-binding.json" with { type: "json" };
 import site from "../../content/site.json" with { type: "json" };
 
@@ -33,6 +34,9 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
             fragments: fragmentIds.map((id) => ({ id, content: ${JSON.stringify(fragments)}[id] }))
           }),
           draft: async (input) => {
+            const declaredPaths = new Set(${JSON.stringify(manifest.regions.map((region) => region.path))});
+            const undeclared = input.changes?.find((change) => !declaredPaths.has(change.path));
+            if (undeclared) throw new Error(\`Path \${undeclared.path} is not declared in the CMS manifest\`);
             window.__cmsCalls.push({ operation: "draft", input });
             return { revision: { id: "test-revision" } };
           },

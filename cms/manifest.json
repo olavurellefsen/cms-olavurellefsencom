@@ -125,6 +125,14 @@
       "pageId": "home"
     },
     {
+      "id": "home.selectedWorkValue",
+      "label": "Selected work items",
+      "kind": "text",
+      "path": "selectedWork",
+      "scope": "page",
+      "pageId": "home"
+    },
+    {
       "id": "home.latestWritingTitle",
       "label": "Writing section title",
       "kind": "text",
