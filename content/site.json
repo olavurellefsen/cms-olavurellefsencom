@@ -159,6 +159,7 @@
     {
       "id": "founder-note",
       "name": "Founder note",
+      "enabled": true,
       "description": "A dated long-form article with summary, topics and social metadata.",
       "category": "Writing",
       "routePattern": "/writing/[slug]",
