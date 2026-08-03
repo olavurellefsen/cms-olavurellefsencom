@@ -2174,6 +2174,97 @@ html.cms-inline-preview [contenteditable="true"]:focus {
   caret-color: #ff7d61;
 }
 
+html.cms-inline-preview .work-list li {
+  position: relative;
+}
+
+html.cms-inline-preview .cms-work-item-controls {
+  position: absolute;
+  z-index: 30;
+  top: 9px;
+  right: 0;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+html.cms-inline-preview .work-list li:hover .cms-work-item-controls,
+html.cms-inline-preview .work-list li:focus-within .cms-work-item-controls,
+html.cms-inline-preview .cms-work-item-controls:focus-within {
+  opacity: 1;
+}
+
+html.cms-inline-preview .cms-work-item-controls button,
+html.cms-inline-preview .cms-work-collection-actions button {
+  min-width: 38px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c4cfcb;
+  border-radius: 4px;
+  background: #fff;
+  color: #193630;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+html.cms-inline-preview .cms-work-item-controls button:hover,
+html.cms-inline-preview .cms-work-item-controls button:focus-visible,
+html.cms-inline-preview .cms-work-collection-actions button:hover,
+html.cms-inline-preview .cms-work-collection-actions button:focus-visible {
+  border-color: #ff7d61;
+  background: #fff6f3;
+}
+
+html.cms-inline-preview .cms-work-item-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.32;
+}
+
+html.cms-inline-preview .cms-work-item-controls__remove {
+  color: #9f3f35;
+}
+
+html.cms-inline-preview .cms-work-collection-actions {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding-top: 16px;
+}
+
+html.cms-inline-preview .cms-work-collection-actions .cms-work-collection-actions__add {
+  width: 100%;
+  min-height: 48px;
+  border-style: dashed;
+  color: #31534b;
+  font-size: 12px;
+}
+
+html.cms-inline-preview .cms-work-collection-actions p {
+  margin: 0;
+  color: #71807b;
+  font-family: var(--sans);
+  font-size: 10px;
+}
+
+@media (max-width: 700px) {
+  html.cms-inline-preview .cms-work-item-controls {
+    top: auto;
+    right: 0;
+    bottom: 8px;
+    opacity: 1;
+  }
+
+  html.cms-inline-preview .cms-work-item-controls button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 @media (max-width: 980px) {
   .cms-workspace {
     grid-template-rows: 108px minmax(0, 1fr);
@@ -2309,6 +2400,29 @@ html.cms-inline-preview [contenteditable="true"]:focus {
   box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
 }
 
+.cms-work-inspector form {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.cms-work-inspector__body {
+  align-content: start;
+}
+
+.cms-work-inspector__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid #d9e1de;
+  background: #fff;
+}
+
+.cms-work-inspector__actions button {
+  min-height: 42px;
+}
+
 .cms-page-modal > header,
 .cms-page-modal > footer,
 .cms-chat > header {
@@ -2338,6 +2452,11 @@ html.cms-inline-preview [contenteditable="true"]:focus {
 
 .cms-work-form {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cms-work-inspector .cms-work-form {
+  grid-template-columns: 1fr;
+  margin: 0;
 }
 
 .cms-work-form__wide {

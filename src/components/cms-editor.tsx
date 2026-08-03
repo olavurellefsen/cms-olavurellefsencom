@@ -91,6 +91,8 @@ type WorkItem = {
   role: string;
 };
 
+type WorkItemField = "description" | "href" | "name" | "role";
+
 type CmsRevision = { id: string };
 type CmsVersion = { id: string; createdAt?: string; summary?: string };
 
@@ -415,6 +417,29 @@ export function CmsEditor() {
 
   function updateRegion(regionId: string, value: string) {
     const region = registryRef.current[regionId];
+    const workLocation = workItemLocation(regionId, region?.path);
+    const workCollection = selectedWorkCollection();
+    if (workLocation && workCollection?.fragmentId) {
+      setDirty((current) => {
+        const items = workItemsFromState(
+          workCollection,
+          current,
+          fragmentsRef.current,
+          registryRef.current,
+        );
+        const item = items[workLocation.index];
+        if (!item) return current;
+        item[workLocation.field] = value;
+        return currentWorkDirtyState(
+          current,
+          items,
+          workCollection,
+          fragmentsRef.current,
+          registryRef.current,
+        );
+      });
+      return;
+    }
     const baseline = region?.fragmentId
       ? readPath(fragmentsRef.current[region.fragmentId], region.path || "")
       : "";
@@ -429,6 +454,10 @@ export function CmsEditor() {
   updateRegionRef.current = updateRegion;
 
   function valueForRegion(region: CmsRegion): string {
+    const workLocation = workItemLocation(region.id, region.path);
+    if (workLocation) {
+      return currentWorkItemsFromRefs()[workLocation.index]?.[workLocation.field] || "";
+    }
     const draftValue = dirty[region.id];
     return typeof draftValue === "string"
       ? draftValue
@@ -476,8 +505,16 @@ export function CmsEditor() {
     );
     const workDraft = workCollection ? dirtyRef.current[workCollection.id] : undefined;
     const workDraftItems = Array.isArray(workDraft) ? normalizeWorkItems(workDraft) : undefined;
+    const workItems = workCollection
+      ? workItemsFromState(
+          workCollection,
+          dirtyRef.current,
+          fragmentsRef.current,
+          registryRef.current,
+        )
+      : [];
     if (workCollection && workDraftItems) {
-      renderCurrentWorkPreview(doc, workDraftItems, workCollection);
+      renderCurrentWorkPreview(doc, workItems, workCollection);
     }
     const cleanups: Array<() => void> = [];
     const runtimeRegions: Record<string, CmsRegion> = {};
@@ -530,6 +567,7 @@ export function CmsEditor() {
 
         const selectImage = (event: Event) => {
           event.preventDefault();
+          setNewWorkOpen(false);
           setSelectedRegionId(id);
           setDrawer(null);
         };
@@ -559,6 +597,7 @@ export function CmsEditor() {
       const readValue = () => editableValue(element, region, turndownRef.current);
       const focus = () => {
         focusSnapshotRef.current.set(id, { html: element.innerHTML, value: readValue() });
+        setNewWorkOpen(false);
         setSelectedRegionId(id);
         setDrawer(null);
       };
@@ -594,6 +633,21 @@ export function CmsEditor() {
         element.removeEventListener("keydown", keydown);
         element.removeEventListener("paste", paste);
       });
+    }
+
+    if (workCollection && pageId === "home") {
+      cleanups.push(
+        installCurrentWorkControls(doc, workItems, {
+          add: () => {
+            setError("");
+            setDrawer(null);
+            setSelectedRegionId(undefined);
+            setNewWorkOpen(true);
+          },
+          move: moveWorkItem,
+          remove: removeWorkItem,
+        }),
+      );
     }
 
     setRegistry((current) => ({ ...current, ...runtimeRegions }));
@@ -841,11 +895,18 @@ export function CmsEditor() {
   function currentWorkItems(): WorkItem[] {
     const collection = selectedWorkCollection();
     if (!collection?.fragmentId) return [];
-    const draftValue = dirty[collection.id];
-    const value = Array.isArray(draftValue)
-      ? draftValue
-      : readPathValue(fragments[collection.fragmentId], collection.path);
-    return normalizeWorkItems(value);
+    return workItemsFromState(collection, dirty, fragments, registry);
+  }
+
+  function currentWorkItemsFromRefs(): WorkItem[] {
+    const collection = selectedWorkCollection();
+    if (!collection?.fragmentId) return [];
+    return workItemsFromState(
+      collection,
+      dirtyRef.current,
+      fragmentsRef.current,
+      registryRef.current,
+    );
   }
 
   function updateCurrentWork(items: WorkItem[], message: string) {
@@ -863,13 +924,9 @@ export function CmsEditor() {
       pageId: collection.pageId,
       scope: collection.scope,
     });
-    const baseline = readPathValue(fragments[collection.fragmentId], collection.path);
-    setDirty((current) => {
-      const next = { ...current };
-      if (sameValue(items, baseline)) delete next[collection.id];
-      else next[collection.id] = items;
-      return next;
-    });
+    setDirty((current) =>
+      currentWorkDirtyState(current, items, collection, fragmentsRef.current, registryRef.current),
+    );
     const doc = frameRef.current?.contentDocument;
     if (doc && renderCurrentWorkPreview(doc, items, collection)) {
       window.clearTimeout(previewAttachTimerRef.current);
@@ -896,7 +953,7 @@ export function CmsEditor() {
     }
     updateCurrentWork(
       [
-        ...currentWorkItems(),
+        ...currentWorkItemsFromRefs(),
         {
           ...newWork,
           name: newWork.name.trim(),
@@ -910,16 +967,42 @@ export function CmsEditor() {
     setNewWork(emptyNewWork());
     setNewWorkOpen(false);
     setError("");
+    const newIndex = currentWorkItemsFromRefs().length;
+    window.setTimeout(() => focusCurrentWorkItem(newIndex), 80);
   }
 
   function removeWorkItem(index: number) {
-    const items = currentWorkItems();
+    const items = currentWorkItemsFromRefs();
     const item = items[index];
     if (!item) return;
+    setSelectedRegionId(undefined);
     updateCurrentWork(
       items.filter((_, itemIndex) => itemIndex !== index),
-      "Work entry removed from draft",
+      `Removed ${item.name} from draft`,
     );
+  }
+
+  function moveWorkItem(index: number, direction: -1 | 1) {
+    const items = currentWorkItemsFromRefs();
+    const targetIndex = index + direction;
+    if (!items[index] || !items[targetIndex]) return;
+    [items[index], items[targetIndex]] = [items[targetIndex], items[index]];
+    setSelectedRegionId(undefined);
+    updateCurrentWork(items, `Moved ${items[targetIndex].name} ${direction < 0 ? "up" : "down"}`);
+    window.setTimeout(() => focusCurrentWorkItem(targetIndex), 80);
+  }
+
+  function focusCurrentWorkItem(index: number) {
+    const doc = frameRef.current?.contentDocument;
+    const element = doc?.querySelector<HTMLElement>(
+      `[data-usable-cms-region="home.work.${index}.name"]`,
+    );
+    if (!element) return;
+    element.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "center",
+    });
+    element.focus();
   }
 
   async function sendChat() {
@@ -1476,92 +1559,97 @@ export function CmsEditor() {
       ) : null}
 
       {newWorkOpen ? (
-        <div className="cms-modal-backdrop" role="presentation">
-          <section
-            className="cms-page-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="new-work-title"
-          >
-            <header>
-              <div>
-                <span className="cms-kicker">Homepage collection</span>
-                <h2 id="new-work-title">Add Current work</h2>
-              </div>
-              <button
-                type="button"
-                className="cms-icon-button"
-                onClick={() => setNewWorkOpen(false)}
-                aria-label="Close new work dialog"
-              >
-                <X size={17} />
-              </button>
-            </header>
-            <p>The entry appears in the preview as a draft. Publish to make it public.</p>
-            <div className="cms-page-form cms-work-form">
-              <label>
-                <span>Name</span>
-                <input
-                  value={newWork.name}
-                  onChange={(event) =>
-                    setNewWork((current) => ({ ...current, name: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Role</span>
-                <input
-                  value={newWork.role}
-                  onChange={(event) =>
-                    setNewWork((current) => ({ ...current, role: event.target.value }))
-                  }
-                />
-              </label>
-              <label className="cms-work-form__wide">
-                <span>Description</span>
-                <textarea
-                  rows={3}
-                  value={newWork.description}
-                  onChange={(event) =>
-                    setNewWork((current) => ({ ...current, description: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Link</span>
-                <input
-                  type="url"
-                  placeholder="https://"
-                  value={newWork.href}
-                  onChange={(event) =>
-                    setNewWork((current) => ({ ...current, href: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span>Accent</span>
-                <select
-                  value={newWork.accent}
-                  onChange={(event) =>
-                    setNewWork((current) => ({
-                      ...current,
-                      accent: event.target.value as WorkItem["accent"],
-                    }))
-                  }
-                >
-                  <option value="coral">Coral</option>
-                  <option value="blue">Blue</option>
-                  <option value="green">Green</option>
-                  <option value="yellow">Yellow</option>
-                </select>
-              </label>
+        <aside className="cms-inspector cms-work-inspector" aria-label="Add Current work">
+          <header>
+            <div>
+              <span className="cms-kicker">Current work</span>
+              <h2>Add work item</h2>
             </div>
-            {error ? (
-              <p className="cms-editor__error" role="alert">
-                {error}
+            <button
+              type="button"
+              className="cms-icon-button"
+              onClick={() => setNewWorkOpen(false)}
+              aria-label="Close new work inspector"
+              title="Close inspector"
+            >
+              <X size={17} />
+            </button>
+          </header>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              addWorkItem();
+            }}
+          >
+            <div className="cms-inspector__body cms-work-inspector__body">
+              <p className="cms-inspector__hint">
+                Add the item here, then edit its visible text directly on the page.
               </p>
-            ) : null}
-            <footer>
+              <div className="cms-page-form cms-work-form">
+                <label>
+                  <span>Name</span>
+                  <input
+                    value={newWork.name}
+                    onChange={(event) =>
+                      setNewWork((current) => ({ ...current, name: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Role</span>
+                  <input
+                    value={newWork.role}
+                    onChange={(event) =>
+                      setNewWork((current) => ({ ...current, role: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Description</span>
+                  <textarea
+                    rows={4}
+                    value={newWork.description}
+                    onChange={(event) =>
+                      setNewWork((current) => ({ ...current, description: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Work URL</span>
+                  <input
+                    type="url"
+                    placeholder="https://"
+                    value={newWork.href}
+                    onChange={(event) =>
+                      setNewWork((current) => ({ ...current, href: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Number accent</span>
+                  <select
+                    value={newWork.accent}
+                    onChange={(event) =>
+                      setNewWork((current) => ({
+                        ...current,
+                        accent: event.target.value as WorkItem["accent"],
+                      }))
+                    }
+                  >
+                    <option value="coral">Coral</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="yellow">Yellow</option>
+                  </select>
+                </label>
+              </div>
+              {error ? (
+                <p className="cms-editor__error" role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+            <footer className="cms-work-inspector__actions">
               <button
                 type="button"
                 className="cms-secondary-button"
@@ -1569,12 +1657,12 @@ export function CmsEditor() {
               >
                 Cancel
               </button>
-              <button type="button" className="cms-primary-button" onClick={addWorkItem}>
+              <button type="submit" className="cms-primary-button">
                 <Plus size={16} /> Add to draft
               </button>
             </footer>
-          </section>
-        </div>
+          </form>
+        </aside>
       ) : null}
 
       {newPageOpen ? (
@@ -1944,6 +2032,129 @@ function normalizeWorkItems(value: unknown): WorkItem[] {
       },
     ];
   });
+}
+
+function workItemLocation(regionId: string, path?: string) {
+  const match =
+    path?.match(/^selectedWork\.(\d+)\.(description|href|name|role)$/) ||
+    regionId.match(/^home\.work\.(\d+)\.(description|href|name|role)$/);
+  if (!match) return undefined;
+  return { field: match[2] as WorkItemField, index: Number(match[1]) };
+}
+
+function workItemsFromState(
+  collection: CmsCollection,
+  dirty: Record<string, CmsDirtyValue>,
+  fragments: Record<string, Record<string, unknown>>,
+  registry: Record<string, CmsRegion>,
+): WorkItem[] {
+  if (!collection.fragmentId) return [];
+  const collectionDraft = dirty[collection.id];
+  const value = Array.isArray(collectionDraft)
+    ? collectionDraft
+    : readPathValue(fragments[collection.fragmentId], collection.path);
+  const items = normalizeWorkItems(value);
+
+  for (const [regionId, draftValue] of Object.entries(dirty)) {
+    if (typeof draftValue !== "string") continue;
+    const location = workItemLocation(regionId, registry[regionId]?.path);
+    if (location && items[location.index]) {
+      items[location.index][location.field] = draftValue;
+    }
+  }
+  return items;
+}
+
+function currentWorkDirtyState(
+  current: Record<string, CmsDirtyValue>,
+  items: WorkItem[],
+  collection: CmsCollection,
+  fragments: Record<string, Record<string, unknown>>,
+  registry: Record<string, CmsRegion>,
+) {
+  const next = { ...current };
+  for (const regionId of Object.keys(next)) {
+    if (regionId !== collection.id && workItemLocation(regionId, registry[regionId]?.path)) {
+      delete next[regionId];
+    }
+  }
+  const baseline = collection.fragmentId
+    ? readPathValue(fragments[collection.fragmentId], collection.path)
+    : [];
+  if (sameValue(items, baseline)) delete next[collection.id];
+  else next[collection.id] = items;
+  return next;
+}
+
+function installCurrentWorkControls(
+  doc: Document,
+  items: WorkItem[],
+  handlers: {
+    add: () => void;
+    move: (index: number, direction: -1 | 1) => void;
+    remove: (index: number) => void;
+  },
+) {
+  const list = doc.querySelector<HTMLOListElement>(".work-list");
+  if (!list) return () => undefined;
+  for (const existing of doc.querySelectorAll("[data-cms-collection-control]")) existing.remove();
+
+  const cleanups: Array<() => void> = [];
+  const rows = Array.from(list.children).filter(
+    (element): element is HTMLLIElement => element.tagName === "LI",
+  );
+  const actionButton = (label: string, text: string, disabled: boolean, action: () => void) => {
+    const button = doc.createElement("button");
+    button.type = "button";
+    button.textContent = text;
+    button.disabled = disabled;
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    const activate = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      action();
+    };
+    button.addEventListener("click", activate);
+    cleanups.push(() => button.removeEventListener("click", activate));
+    return button;
+  };
+
+  rows.forEach((row, index) => {
+    const item = items[index];
+    if (!item) return;
+    const controls = doc.createElement("div");
+    controls.className = "cms-work-item-controls";
+    controls.dataset.cmsCollectionControl = "work-item";
+    controls.setAttribute("aria-label", `${item.name} order and removal controls`);
+    controls.append(
+      actionButton(`Move ${item.name} up`, "↑", index === 0, () => handlers.move(index, -1)),
+      actionButton(`Move ${item.name} down`, "↓", index === rows.length - 1, () =>
+        handlers.move(index, 1),
+      ),
+      actionButton(`Remove ${item.name} from Current work`, "×", false, () =>
+        handlers.remove(index),
+      ),
+    );
+    controls.lastElementChild?.classList.add("cms-work-item-controls__remove");
+    row.append(controls);
+    cleanups.push(() => controls.remove());
+  });
+
+  const collectionActions = doc.createElement("div");
+  collectionActions.className = "cms-work-collection-actions";
+  collectionActions.dataset.cmsCollectionControl = "current-work";
+  const addButton = actionButton("Add work item", "+ Add work item", false, handlers.add);
+  addButton.className = "cms-work-collection-actions__add";
+  const hint = doc.createElement("p");
+  hint.textContent = "Changes remain in draft until Publish.";
+  collectionActions.append(addButton, hint);
+  list.after(collectionActions);
+  cleanups.push(() => collectionActions.remove());
+
+  return () => {
+    for (const cleanup of cleanups) cleanup();
+  };
 }
 
 function renderCurrentWorkPreview(

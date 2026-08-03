@@ -169,24 +169,29 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await expect(page.locator(".cms-preview--mobile")).toBeVisible();
   await expect(page.locator(".cms-preview--mobile")).toHaveCSS("width", "390px");
 
-  await page.getByRole("button", { name: "Content" }).click();
-  const currentWorkManager = page.getByRole("region", { name: "Current work" });
-  const writingManager = page.getByRole("region", { name: "Writing" });
-  await expect(currentWorkManager.getByText("Usable", { exact: true })).toBeVisible();
-  await currentWorkManager.getByRole("button", { name: "Add" }).click();
-  const newWorkDialog = page.getByRole("dialog", { name: "Add Current work" });
-  await newWorkDialog.getByLabel("Name").fill("Example Project");
-  await newWorkDialog.getByLabel("Role").fill("Advisor");
-  await newWorkDialog.getByLabel("Description").fill("A new long-horizon project.");
-  await newWorkDialog.getByLabel("Link").fill("https://example.com/");
-  await newWorkDialog.getByRole("button", { name: "Add to draft" }).click();
-  await expect(currentWorkManager.getByText("Example Project", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Desktop preview" }).click();
+  await preview.getByRole("button", { name: "Add work item" }).click();
+  const newWorkInspector = page.getByRole("complementary", { name: "Add Current work" });
+  await newWorkInspector.getByLabel("Name").fill("Example Project");
+  await newWorkInspector.getByLabel("Role").fill("Advisor");
+  await newWorkInspector.getByLabel("Description").fill("A new long-horizon project.");
+  await newWorkInspector.getByLabel("Work URL").fill("https://example.com/");
+  await newWorkInspector.getByRole("button", { name: "Add to draft" }).click();
   await expect(
     preview.locator(".work-list").getByText("Example Project", { exact: true }),
   ).toBeVisible();
   await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText(
     "Example Project",
   );
+  const workInspector = page.getByRole("complementary", { name: "Selected element settings" });
+  await expect(workInspector.getByLabel("Work URL")).toHaveValue("https://example.com/");
+  await workInspector.getByLabel("Work URL").fill("https://example.org/long-horizon");
+  await preview.getByRole("button", { name: "Move Example Project up" }).click();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 4 name" })).toHaveText(
+    "Example Project",
+  );
+  await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText("Tøkni");
+  await expect(preview.getByRole("button", { name: "Move Example Project down" })).toBeEnabled();
 
   await page.reload();
   await expect(page.getByRole("main", { name: "Usable CMS inline editor" })).toBeVisible();
@@ -194,11 +199,11 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
     preview.locator(".work-list").getByText("Example Project", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Content" }).click();
-  await expect(currentWorkManager.getByText("Example Project", { exact: true })).toBeVisible();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 4 name" })).toHaveText(
+    "Example Project",
+  );
 
-  await currentWorkManager.getByRole("button", { name: "Remove Usable from Current work" }).click();
-  await expect(currentWorkManager.getByText("Usable", { exact: true })).not.toBeVisible();
+  await preview.getByRole("button", { name: "Remove Usable from Current work" }).click();
   await expect(
     preview.locator(".work-list").getByText("Usable", { exact: true }),
   ).not.toBeVisible();
@@ -222,14 +227,21 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
           .reverse()
           .find((candidate) => candidate.path === "selectedWork");
         if (!change?.afterRef) return false;
-        const items = JSON.parse(change.afterRef) as Array<{ name?: string }>;
+        const items = JSON.parse(change.afterRef) as Array<{ href?: string; name?: string }>;
         return (
-          items.some((item) => item.name === "Example Project") &&
+          items.some(
+            (item) =>
+              item.name === "Example Project" && item.href === "https://example.org/long-horizon",
+          ) &&
+          items.findIndex((item) => item.name === "Example Project") <
+            items.findIndex((item) => item.name === "Tøkni") &&
           !items.some((item) => item.name === "Usable")
         );
       }),
     )
     .toBe(true);
+  await page.getByRole("button", { name: "Content" }).click();
+  const writingManager = page.getByRole("region", { name: "Writing" });
   await expect(writingManager.getByRole("button", { name: "Add" })).toBeVisible();
   await expect(
     writingManager.getByRole("button", { name: "Hide Why I am writing here from Writing" }),
