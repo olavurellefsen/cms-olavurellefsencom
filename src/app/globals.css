@@ -1861,6 +1861,120 @@ html.cms-editing body > .site-footer {
   gap: 10px;
 }
 
+.cms-content-manager {
+  display: grid;
+  gap: 26px;
+}
+
+.cms-content-manager > section {
+  display: grid;
+  gap: 11px;
+}
+
+.cms-content-manager > section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cms-content-manager h3 {
+  margin: 2px 0 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.cms-collection-add {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid #b8c6c1;
+  border-radius: 4px;
+  background: #fff;
+  color: #193630;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.cms-collection-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-collection-list li {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 7px 7px 11px;
+  border: 1px solid #d3dcd8;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.cms-collection-list li > span,
+.cms-collection-open span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.cms-collection-list strong,
+.cms-collection-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cms-collection-list strong {
+  color: #263330;
+  font-size: 12px;
+}
+
+.cms-collection-list small {
+  color: #71807b;
+  font-size: 10px;
+}
+
+.cms-collection-list li > button {
+  width: 38px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d3dcd8;
+  border-radius: 4px;
+  background: #fff;
+  color: #9f3f35;
+  cursor: pointer;
+}
+
+.cms-collection-list li > .cms-collection-open {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  border: 0;
+  color: inherit;
+}
+
+.cms-content-manager__note {
+  margin: 0;
+  color: #71807b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .cms-page-list button,
 .cms-version-list > div {
   width: 100%;
@@ -1968,6 +2082,27 @@ html.cms-editing body > .site-footer {
   bottom: 16px;
 }
 
+.cms-toast--action {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.cms-toast--action button {
+  min-height: 36px;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid #6fab8a;
+  border-radius: 4px;
+  background: #fff;
+  color: #175a3a;
+  font: inherit;
+  font-weight: 780;
+  cursor: pointer;
+}
+
 /* These rules run inside the same-origin public-page preview iframe. */
 html.cms-inline-preview [data-cms-editable="text"] {
   position: relative;
@@ -2058,6 +2193,97 @@ html.cms-inline-preview .cms-image-region:focus-within::after {
 
 html.cms-inline-preview [contenteditable="true"]:focus {
   caret-color: #ff7d61;
+}
+
+html.cms-inline-preview .work-list li {
+  position: relative;
+}
+
+html.cms-inline-preview .cms-work-item-controls {
+  position: absolute;
+  z-index: 30;
+  top: 9px;
+  right: 0;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+html.cms-inline-preview .work-list li:hover .cms-work-item-controls,
+html.cms-inline-preview .work-list li:focus-within .cms-work-item-controls,
+html.cms-inline-preview .cms-work-item-controls:focus-within {
+  opacity: 1;
+}
+
+html.cms-inline-preview .cms-work-item-controls button,
+html.cms-inline-preview .cms-work-collection-actions button {
+  min-width: 38px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c4cfcb;
+  border-radius: 4px;
+  background: #fff;
+  color: #193630;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+html.cms-inline-preview .cms-work-item-controls button:hover,
+html.cms-inline-preview .cms-work-item-controls button:focus-visible,
+html.cms-inline-preview .cms-work-collection-actions button:hover,
+html.cms-inline-preview .cms-work-collection-actions button:focus-visible {
+  border-color: #ff7d61;
+  background: #fff6f3;
+}
+
+html.cms-inline-preview .cms-work-item-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.32;
+}
+
+html.cms-inline-preview .cms-work-item-controls__remove {
+  color: #9f3f35;
+}
+
+html.cms-inline-preview .cms-work-collection-actions {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding-top: 16px;
+}
+
+html.cms-inline-preview .cms-work-collection-actions .cms-work-collection-actions__add {
+  width: 100%;
+  min-height: 48px;
+  border-style: dashed;
+  color: #31534b;
+  font-size: 12px;
+}
+
+html.cms-inline-preview .cms-work-collection-actions p {
+  margin: 0;
+  color: #71807b;
+  font-family: var(--sans);
+  font-size: 10px;
+}
+
+@media (max-width: 700px) {
+  html.cms-inline-preview .cms-work-item-controls {
+    top: auto;
+    right: 0;
+    bottom: 8px;
+    opacity: 1;
+  }
+
+  html.cms-inline-preview .cms-work-item-controls button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 980px) {
@@ -2195,6 +2421,29 @@ html.cms-inline-preview [contenteditable="true"]:focus {
   box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
 }
 
+.cms-work-inspector form {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.cms-work-inspector__body {
+  align-content: start;
+}
+
+.cms-work-inspector__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid #d9e1de;
+  background: #fff;
+}
+
+.cms-work-inspector__actions button {
+  min-height: 42px;
+}
+
 .cms-page-modal > header,
 .cms-page-modal > footer,
 .cms-chat > header {
@@ -2222,6 +2471,19 @@ html.cms-inline-preview [contenteditable="true"]:focus {
   margin-block: 22px;
 }
 
+.cms-work-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cms-work-inspector .cms-work-form {
+  grid-template-columns: 1fr;
+  margin: 0;
+}
+
+.cms-work-form__wide {
+  grid-column: 1 / -1;
+}
+
 .cms-page-form label {
   display: grid;
   gap: 7px;
@@ -2230,6 +2492,7 @@ html.cms-inline-preview [contenteditable="true"]:focus {
 }
 
 .cms-page-form input,
+.cms-page-form select,
 .cms-page-form textarea,
 .cms-chat textarea {
   width: 100%;
@@ -2242,6 +2505,11 @@ html.cms-inline-preview [contenteditable="true"]:focus {
   font-weight: 500;
   line-height: 1.45;
   padding: 10px 12px;
+}
+
+.cms-page-form select {
+  min-height: 44px;
+  padding: 0 12px;
 }
 
 .cms-page-form small {

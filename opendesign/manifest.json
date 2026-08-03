@@ -1,0 +1,51 @@
+{
+  "generated": "2026-08-03T10:24:00Z",
+  "sections": [
+    {
+      "id": "mockups",
+      "label": "Mockups",
+      "groups": [
+        {
+          "slug": "current-work-inline-controls",
+          "files": [
+            {
+              "label": "Inline collection controls",
+              "path": "mockups/current-work-inline-controls/index.html"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "design-systems",
+      "label": "Design Systems",
+      "groups": [
+        {
+          "slug": "olavurellefsen-site",
+          "files": [
+            {
+              "label": "README",
+              "path": "design-systems/olavurellefsen-site/README.md"
+            },
+            {
+              "label": "Skill",
+              "path": "design-systems/olavurellefsen-site/SKILL.md"
+            },
+            {
+              "label": "Voice and tone",
+              "path": "design-systems/olavurellefsen-site/brand/voice-and-tone.md"
+            },
+            {
+              "label": "Style notes",
+              "path": "design-systems/olavurellefsen-site/brand/style-notes.md"
+            },
+            {
+              "label": "Colors and type tokens",
+              "path": "design-systems/olavurellefsen-site/tokens/colors_and_type.css"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

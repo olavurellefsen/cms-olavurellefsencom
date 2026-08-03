@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Current work inline controls</title>
+    <link rel="stylesheet" href="../../design-systems/olavurellefsen-site/tokens/colors_and_type.css" />
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #dfe5e1; color: var(--oe-text-primary); font-family: var(--oe-body-font); }
+      .topbar { height: 62px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid #c7d1cd; background: white; }
+      .topbar strong { font-size: 14px; }
+      .state { color: #9b4a1f; font-size: 12px; font-weight: var(--oe-weight-bold); }
+      .workspace { position: relative; }
+      .canvas { width: min(1180px, calc(100% - 48px)); min-height: calc(100vh - 110px); margin: 24px auto; padding: 78px 82px; background: var(--oe-surface-primary); }
+      h1 { margin: 0 0 52px; font-family: var(--oe-heading-font); font-size: clamp(42px, 6vw, 64px); font-weight: 560; text-align: center; }
+      ol { margin: 0; padding: 0; list-style: none; }
+      li { position: relative; border-top: 1px solid var(--oe-border-subtle); }
+      li:last-child { border-bottom: 1px solid var(--oe-border-subtle); }
+      .row { min-height: 142px; display: grid; grid-template-columns: .25fr .85fr 1.25fr 42px; gap: 30px; align-items: center; }
+      .number { color: var(--oe-color-coral); font-family: var(--oe-heading-font); font-size: 28px; }
+      h2 { margin: 0 0 5px; font-family: var(--oe-heading-font); font-size: 30px; font-weight: 560; }
+      p { margin: 0; color: var(--oe-text-secondary); }
+      .role { font-size: 13px; font-weight: var(--oe-weight-bold); }
+      .tools { position: absolute; z-index: 2; top: 10px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity 140ms ease; }
+      li:hover .tools, li:focus-within .tools { opacity: 1; }
+      button { min-width: 36px; min-height: 36px; border: 1px solid #cbd5d1; border-radius: 4px; background: white; color: var(--oe-text-primary); font: inherit; font-weight: var(--oe-weight-bold); cursor: pointer; }
+      button:hover { border-color: var(--oe-action-primary); background: #fff6f3; }
+      button:disabled { opacity: .35; cursor: not-allowed; }
+      .remove { color: #9f3f35; }
+      .add { width: 100%; min-height: 48px; margin-top: 18px; border-style: dashed; color: #31534b; }
+      .note { margin-top: 10px; font-size: 12px; text-align: center; }
+      .arrow { border: 0; background: transparent; font-size: 22px; }
+      .inspector { position: fixed; z-index: 5; top: 76px; right: 14px; width: min(340px, calc(100% - 28px)); padding: 18px; border: 1px solid #c7d1cd; border-radius: 6px; box-shadow: 0 18px 45px rgb(16 24 23 / 18%); background: white; }
+      .inspector[hidden] { display: none; }
+      .inspector header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+      .inspector h3 { margin: 0; font-family: var(--oe-heading-font); font-size: 24px; }
+      .inspector label { display: grid; gap: 7px; font-size: 12px; font-weight: var(--oe-weight-bold); }
+      .inspector input { min-height: 42px; width: 100%; padding: 9px 10px; border: 1px solid #b7c4c0; border-radius: 4px; font: inherit; }
+      .toast { position: fixed; z-index: 6; right: 16px; bottom: 16px; display: flex; gap: 14px; align-items: center; padding: 11px 14px; border: 1px solid #9dd5b7; border-radius: 4px; box-shadow: 0 10px 30px rgb(16 24 23 / 16%); background: #eaf8f0; color: #175a3a; font-size: 13px; font-weight: var(--oe-weight-bold); }
+      .toast[hidden] { display: none; }
+      @media (max-width: 720px) { .canvas { width: 100%; margin: 0; padding: 42px 20px; } .row { grid-template-columns: 48px 1fr; gap: 14px; padding: 24px 0 64px; } .description { grid-column: 2; } .arrow { display: none; } .tools { top: auto; bottom: 10px; opacity: 1; } .tools button { min-width: 44px; min-height: 44px; } .toast { right: 8px; bottom: 8px; left: 8px; justify-content: space-between; } }
+    </style>
+  </head>
+  <body>
+    <header class="topbar"><strong>Home · Usable CMS</strong><span class="state">✓ Changed</span></header>
+    <div class="workspace"><main class="canvas">
+      <h1>Work with a long horizon</h1>
+      <ol id="work-list">
+        <li data-url="https://usable.dev"><div class="tools"></div><div class="row"><span class="number">01</span><div><h2 contenteditable="true">Usable</h2><p class="role" contenteditable="true">CEO &amp; Co-founder</p></div><p class="description" contenteditable="true">Durable organisational memory and shared context for people and AI agents.</p><button class="arrow" type="button" aria-label="Edit Usable details">↗</button></div></li>
+        <li data-url="https://setur.fo"><div class="tools"></div><div class="row"><span class="number">02</span><div><h2 contenteditable="true">University of the Faroe Islands</h2><p class="role" contenteditable="true">Chairman of the Board</p></div><p class="description" contenteditable="true">Strengthening higher education, research and public service in a small knowledge society.</p><button class="arrow" type="button" aria-label="Edit University details">↗</button></div></li>
+        <li data-url="https://www.artmuseum.fo/"><div class="tools"></div><div class="row"><span class="number">03</span><div><h2 contenteditable="true">National Gallery of the Faroe Islands</h2><p class="role" contenteditable="true">Chairman of the Board</p></div><p class="description" contenteditable="true">The Faroe Islands’ national museum for Faroese art.</p><button class="arrow" type="button" aria-label="Edit National Gallery details">↗</button></div></li>
+      </ol>
+      <button class="add" id="add">＋ Add work item</button>
+      <p class="note">Changes stay in draft until Publish.</p>
+    </main>
+    <aside class="inspector" id="inspector" aria-label="Selected element settings" hidden>
+      <header><h3>Work link</h3><button type="button" id="close-inspector" aria-label="Close inspector">×</button></header>
+      <label>Work URL<input id="work-url" type="url" /></label>
+    </aside>
+    <output class="toast" id="toast" aria-live="polite" hidden><span id="toast-message"></span><button type="button" id="undo">↶ Undo</button></output>
+    </div>
+    <script>
+      const list = document.querySelector("#work-list");
+      const inspector = document.querySelector("#inspector");
+      const workUrl = document.querySelector("#work-url");
+      const toast = document.querySelector("#toast");
+      let selectedItem;
+      let removal;
+      let undoTimer;
+      function renderControls() {
+        [...list.children].forEach((item, index, items) => {
+          item.querySelector(".number").textContent = String(index + 1).padStart(2, "0");
+          const tools = item.querySelector(".tools");
+          tools.replaceChildren();
+          for (const [label, text, disabled, action] of [
+            ["Move up", "↑", index === 0, () => list.insertBefore(item, item.previousElementSibling)],
+            ["Move down", "↓", index === items.length - 1, () => list.insertBefore(item.nextElementSibling, item)],
+            ["Remove", "×", false, () => {
+              const next = item.nextElementSibling;
+              removal = { item, next };
+              item.remove();
+              document.querySelector("#toast-message").textContent = `Removed ${item.querySelector("h2").textContent} from draft`;
+              toast.hidden = false;
+              clearTimeout(undoTimer);
+              undoTimer = setTimeout(() => { toast.hidden = true; removal = undefined; }, 6000);
+            }],
+          ]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.ariaLabel = label;
+            button.title = label;
+            button.textContent = text;
+            button.disabled = disabled;
+            if (label === "Remove") button.className = "remove";
+            button.addEventListener("click", () => { action(); renderControls(); });
+            tools.append(button);
+          }
+        });
+      }
+      document.querySelector("#add").addEventListener("click", () => {
+        const template = list.lastElementChild.cloneNode(true);
+        template.querySelector("h2").textContent = "New work item";
+        template.querySelector(".role").textContent = "Role";
+        template.querySelector(".description").textContent = "Describe this work.";
+        template.dataset.url = "https://";
+        list.append(template);
+        renderControls();
+        template.querySelector("h2").focus();
+      });
+      list.addEventListener("click", (event) => {
+        if (!event.target.closest(".arrow")) return;
+        selectedItem = event.target.closest("li");
+        workUrl.value = selectedItem.dataset.url;
+        inspector.hidden = false;
+      });
+      workUrl.addEventListener("input", () => { if (selectedItem) selectedItem.dataset.url = workUrl.value; });
+      document.querySelector("#close-inspector").addEventListener("click", () => { inspector.hidden = true; });
+      document.querySelector("#undo").addEventListener("click", () => {
+        if (!removal) return;
+        list.insertBefore(removal.item, removal.next);
+        clearTimeout(undoTimer);
+        toast.hidden = true;
+        removal = undefined;
+        renderControls();
+      });
+      renderControls();
+    </script>
+  </body>
+</html>

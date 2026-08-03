@@ -1,0 +1,34 @@
+:root {
+  --oe-color-paper: #f2f5f1;
+  --oe-color-paper-deep: #e4e9e4;
+  --oe-color-surface: #fbfcfa;
+  --oe-color-ink: #132b27;
+  --oe-color-muted: #53635f;
+  --oe-color-line: #bdc9c4;
+  --oe-color-coral: #e24f3b;
+  --oe-color-coral-ui: #ff7d61;
+  --oe-color-blue: #2f6f85;
+  --oe-color-green: #1f5a47;
+  --oe-color-yellow: #e4bc3f;
+
+  --oe-font-display: "Newsreader Variable", Georgia, serif;
+  --oe-font-interface: "Manrope Variable", "Avenir Next", sans-serif;
+  --oe-weight-regular: 500;
+  --oe-weight-semibold: 650;
+  --oe-weight-bold: 720;
+
+  --oe-size-caption: 0.75rem;
+  --oe-size-body: 1rem;
+  --oe-size-item-title: 1.9375rem;
+  --oe-size-section-title: 4rem;
+
+  --oe-surface-primary: var(--oe-color-paper);
+  --oe-surface-raised: var(--oe-color-surface);
+  --oe-text-primary: var(--oe-color-ink);
+  --oe-text-secondary: var(--oe-color-muted);
+  --oe-border-subtle: var(--oe-color-line);
+  --oe-action-primary: var(--oe-color-coral-ui);
+  --oe-focus-ring: var(--oe-color-coral-ui);
+  --oe-heading-font: var(--oe-font-display);
+  --oe-body-font: var(--oe-font-interface);
+}

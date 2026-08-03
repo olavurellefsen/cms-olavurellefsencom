@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import manifest from "../../cms/manifest.json" with { type: "json" };
 import binding from "../../cms/site-binding.json" with { type: "json" };
 import site from "../../content/site.json" with { type: "json" };
 
@@ -12,6 +13,55 @@ const fragments = {
     ]),
   ),
 };
+
+test("CMS can refresh an expired Usable login", async ({ page }) => {
+  await page.route("**/broker.js", async (route) => {
+    await route.fulfill({
+      contentType: "application/javascript",
+      body: `
+        window.__cmsCalls = [];
+        window.usableCmsBroker = {
+          session: async () => ({
+            signedIn: true,
+            authorized: false,
+            user: { email: "olavur@ellefsen.fo" },
+            capabilities: {}
+          }),
+          login: async (returnTo, options) => {
+            window.__cmsCalls.push({ operation: "login", returnTo, options });
+          }
+        };
+      `,
+    });
+  });
+
+  await page.goto("http://localhost:3000/?cms=1");
+  await expect(
+    page.getByText("Your Usable login may have expired. Sign in again to refresh access.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Sign in again" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as Window & {
+            __cmsCalls?: Array<{
+              operation: string;
+              options?: { forceLogin?: boolean; sameTab?: boolean };
+            }>;
+          }
+        ).__cmsCalls?.some(
+          (call) =>
+            call.operation === "login" &&
+            call.options?.forceLogin === true &&
+            call.options?.sameTab === true,
+        ),
+      ),
+    )
+    .toBe(true);
+});
 
 test("CMS edits the real page inline and preserves broker workflows", async ({
   page,
@@ -33,6 +83,9 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
             fragments: fragmentIds.map((id) => ({ id, content: ${JSON.stringify(fragments)}[id] }))
           }),
           draft: async (input) => {
+            const declaredPaths = new Set(${JSON.stringify(manifest.regions.map((region) => region.path))});
+            const undeclared = input.changes?.find((change) => !declaredPaths.has(change.path));
+            if (undeclared) throw new Error(\`Path \${undeclared.path} is not declared in the CMS manifest\`);
             window.__cmsCalls.push({ operation: "draft", input });
             return { revision: { id: "test-revision" } };
           },
@@ -116,6 +169,95 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await expect(page.locator(".cms-preview--mobile")).toBeVisible();
   await expect(page.locator(".cms-preview--mobile")).toHaveCSS("width", "390px");
 
+  await page.getByRole("button", { name: "Desktop preview" }).click();
+  await preview.getByRole("button", { name: "Add work item" }).click();
+  const newWorkInspector = page.getByRole("complementary", { name: "Add Current work" });
+  await newWorkInspector.getByLabel("Name").fill("Example Project");
+  await newWorkInspector.getByLabel("Role").fill("Advisor");
+  await newWorkInspector.getByLabel("Description").fill("A new long-horizon project.");
+  await newWorkInspector.getByLabel("Work URL").fill("https://example.com/");
+  await newWorkInspector.getByRole("button", { name: "Add to draft" }).click();
+  await expect(
+    preview.locator(".work-list").getByText("Example Project", { exact: true }),
+  ).toBeVisible();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText(
+    "Example Project",
+  );
+  const workInspector = page.getByRole("complementary", { name: "Selected element settings" });
+  await expect(workInspector.getByLabel("Work URL")).toHaveValue("https://example.com/");
+  await workInspector.getByLabel("Work URL").fill("https://example.org/long-horizon");
+  await preview.getByRole("button", { name: "Move Example Project up" }).click();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 4 name" })).toHaveText(
+    "Example Project",
+  );
+  await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText("Tøkni");
+  await expect(preview.getByRole("button", { name: "Move Example Project down" })).toBeEnabled();
+
+  await page.reload();
+  await expect(page.getByRole("main", { name: "Usable CMS inline editor" })).toBeVisible();
+  await expect(
+    preview.locator(".work-list").getByText("Example Project", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 4 name" })).toHaveText(
+    "Example Project",
+  );
+
+  await preview.getByRole("button", { name: "Remove Usable from Current work" }).click();
+  await expect(
+    preview.locator(".work-list").getByText("Usable", { exact: true }),
+  ).not.toBeVisible();
+  const removalToast = page.locator(".cms-toast--action");
+  await expect(removalToast).toContainText("Removed Usable from draft");
+  await removalToast.getByRole("button", { name: "Undo" }).click();
+  await expect(preview.locator(".work-list").getByText("Usable", { exact: true })).toBeVisible();
+  await preview.getByRole("button", { name: "Remove Usable from Current work" }).click();
+  await expect(
+    preview.locator(".work-list").getByText("Usable", { exact: true }),
+  ).not.toBeVisible();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 1 name" })).toHaveText(
+    "University of the Faroe Islands",
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const calls = (
+          window as Window & {
+            __cmsCalls?: Array<{
+              operation: string;
+              input?: { changes?: Array<{ afterRef?: string; path?: string }> };
+            }>;
+          }
+        ).__cmsCalls;
+        const change = calls
+          ?.filter((call) => call.operation === "draft")
+          .flatMap((call) => call.input?.changes || [])
+          .reverse()
+          .find((candidate) => candidate.path === "selectedWork");
+        if (!change?.afterRef) return false;
+        const items = JSON.parse(change.afterRef) as Array<{ href?: string; name?: string }>;
+        return (
+          items.some(
+            (item) =>
+              item.name === "Example Project" && item.href === "https://example.org/long-horizon",
+          ) &&
+          items.findIndex((item) => item.name === "Example Project") <
+            items.findIndex((item) => item.name === "Tøkni") &&
+          !items.some((item) => item.name === "Usable")
+        );
+      }),
+    )
+    .toBe(true);
+  await page.getByRole("button", { name: "Content" }).click();
+  const writingManager = page.getByRole("region", { name: "Writing" });
+  await expect(writingManager.getByRole("button", { name: "Add" })).toBeVisible();
+  await expect(
+    writingManager.getByRole("button", { name: "Hide Why I am writing here from Writing" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close panel" }).click();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByText("Published", { exact: true }).first()).toBeVisible();
+
   await page.getByRole("button", { name: "Pages" }).click();
   await expect(page.getByRole("navigation", { name: "Website pages" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New founder note" })).toBeVisible();
@@ -175,4 +317,9 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
     "aria-multiline",
     "true",
   );
+
+  await page.goto("http://localhost:3000/?cms=1");
+  const homePreview = page.frameLocator('iframe[title="Home inline editor"]');
+  await homePreview.getByRole("link", { name: "All writing" }).click();
+  await expect(page).toHaveURL(/\/writing\?cms=1$/);
 });
