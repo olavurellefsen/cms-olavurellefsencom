@@ -2,6 +2,7 @@ import "@fontsource-variable/manrope";
 import "@fontsource-variable/newsreader";
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { CmsEmbed } from "@/components/cms-embed";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -65,6 +66,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {children}
         <SiteFooter content={global} />
         <CmsEmbed />
+        <Script
+          id="usable-web-analytics"
+          src="https://web-analytics.usable.dev/js/uwa.js"
+          strategy="afterInteractive"
+          data-domain="www.olavurellefsen.com"
+        />
         <script
           type="application/ld+json"
           // JSON-LD contains trusted, schema-validated CMS content.

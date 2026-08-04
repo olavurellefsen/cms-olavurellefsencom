@@ -59,6 +59,13 @@ test("Usable collaboration article renders its product hero", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Preparing a shared memory" })).toBeVisible();
 });
 
+test("public pages load Usable Web Analytics for the canonical hostname", async ({ page }) => {
+  await page.goto("/");
+  const analytics = page.locator("#usable-web-analytics");
+  await expect(analytics).toHaveAttribute("src", "https://web-analytics.usable.dev/js/uwa.js");
+  await expect(analytics).toHaveAttribute("data-domain", "www.olavurellefsen.com");
+});
+
 test("machine-readable routes and CMS routing are healthy", async ({ request }) => {
   for (const route of [
     "/health",

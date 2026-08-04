@@ -28,6 +28,12 @@ Signed-in editors can use **Pages → New founder note** to create a real `/writ
 
 The editor includes embedded Usable chat. It receives the active page fragment, published baseline, working draft, changed paths, and manifest, allowing the broker to safely create, read, update, publish, and hide declared CMS content. The browser only receives the public `ucms_` integration key; `USABLE_CMS_SERVER_TOKEN` remains server-only.
 
+## Web analytics
+
+Public pages load the cookie-free Usable Web Analytics tracker for
+`www.olavurellefsen.com`. The exact hostname match keeps local development and the Fly
+candidate hostname out of production analytics.
+
 ## Verification
 
 ```sh
