@@ -775,6 +775,14 @@ a {
   color: var(--blue);
 }
 
+.article-prose img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 48px 0 14px;
+  border: 1px solid var(--line);
+}
+
 .not-found {
   min-height: 72vh;
   display: grid;
