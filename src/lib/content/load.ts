@@ -68,6 +68,14 @@ function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+export function pageIdFromTags(tags: string[] | undefined) {
+  for (const prefix of ["cms-page:", "ucms:page:", "page:"]) {
+    const value = tags?.find((tag) => tag.startsWith(prefix))?.slice(prefix.length);
+    if (value) return value;
+  }
+  return undefined;
+}
+
 function normalizePageReference(value: unknown): CmsPageReference | null {
   if (!value || typeof value !== "object") return null;
   const page = value as Record<string, unknown>;
@@ -143,9 +151,7 @@ async function fetchWorkspacePageReferences(): Promise<CmsPageReference[]> {
     const references: CmsPageReference[] = [];
     for (const fragment of payload.fragments || []) {
       const fragmentId = fragment.id || fragment.fragmentId;
-      const pageId = fragment.tags
-        ?.find((tag) => tag.startsWith("cms-page:"))
-        ?.slice("cms-page:".length);
+      const pageId = pageIdFromTags(fragment.tags);
       if (!fragmentId || !pageId) continue;
       let path: string | undefined;
       let title = fragment.title || pageId;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFragmentContent } from "./load";
+import { pageIdFromTags, parseFragmentContent } from "./load";
 import { articleContentSchema } from "./schema";
 
 describe("article schema", () => {
@@ -24,5 +24,13 @@ describe("CMS fragment parsing", () => {
     expect(
       parseFragmentContent('---\nkind: cms-page\n---\n```json\n{"type":"article"}\n```'),
     ).toEqual({ type: "article" });
+  });
+
+  it("resolves page ids from legacy and current CMS identity tags", () => {
+    expect(pageIdFromTags(["usable-cms-page", "cms-page:article-legacy"])).toBe("article-legacy");
+    expect(pageIdFromTags(["usable-cms-page", "ucms:page:article-current"])).toBe(
+      "article-current",
+    );
+    expect(pageIdFromTags(["usable-cms-page", "page:article-fallback"])).toBe("article-fallback");
   });
 });
