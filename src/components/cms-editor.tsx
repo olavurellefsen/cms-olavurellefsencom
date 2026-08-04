@@ -1549,9 +1549,20 @@ export function CmsEditor() {
           </header>
           <div className="cms-inspector__body">
             {selectedRegion.kind === "text" ? (
-              <p className="cms-inspector__hint">
-                Type directly where the text appears on the page.
-              </p>
+              selectedRegion.path === "bodyMarkdown" ? (
+                <label className="cms-inspector__field">
+                  <span>Article Markdown</span>
+                  <textarea
+                    rows={20}
+                    value={valueForRegion(selectedRegion)}
+                    onChange={(event) => updateRegion(selectedRegion.id, event.target.value)}
+                  />
+                </label>
+              ) : (
+                <p className="cms-inspector__hint">
+                  Type directly where the text appears on the page.
+                </p>
+              )
             ) : null}
             {selectedRegion.kind === "image" ? (
               <>
