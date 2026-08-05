@@ -43,11 +43,12 @@ import {
   type ArticleMediaBlock,
   type ArticleMediaPlacement,
   type ArticleMediaType,
+  articleBodyInsertionPoints,
   articleMarkdownForEditor,
   articleMarkdownFromEditor,
   articleMediaBlocks,
   firstArticleHeroMedia,
-  insertArticleMediaAtEditorPosition,
+  insertArticleMedia,
   removeArticleMedia,
   renderArticleMarkdownPreview,
   renderArticleMediaPreview,
@@ -216,6 +217,7 @@ type MediaComposer = {
   editingId?: string;
   file?: File;
   insertAt: number;
+  insertLabel?: string;
   placement: ArticleMediaPlacement;
   src: string;
   type: ArticleMediaType;
@@ -273,6 +275,7 @@ export function CmsEditor() {
   const previewCleanupRef = useRef<() => void>(() => undefined);
   const attachPreviewRef = useRef<() => void>(() => undefined);
   const previewAttachTimerRef = useRef<number | undefined>(undefined);
+  const refreshArticleControlsRef = useRef<() => void>(() => undefined);
   const workRemovalUndoTimerRef = useRef<number | undefined>(undefined);
   const previewLoadedAtRef = useRef(0);
   const dirtyRef = useRef(dirty);
@@ -576,9 +579,10 @@ export function CmsEditor() {
     if (!element) return;
     if (region.kind === "image" && element instanceof HTMLImageElement) element.src = value;
     else if (region.kind === "link" && element instanceof HTMLAnchorElement) element.href = value;
-    else if (region.path === "bodyMarkdown")
+    else if (region.path === "bodyMarkdown") {
       element.innerHTML = renderArticleMarkdownPreview(value);
-    else setEditableText(element, value);
+      window.setTimeout(() => refreshArticleControlsRef.current(), 0);
+    } else setEditableText(element, value);
   }, []);
 
   useEffect(() => {
@@ -702,6 +706,12 @@ export function CmsEditor() {
         setDrawer(null);
       };
       const input = () => updateRegionRef.current(id, readValue());
+      const blur = (event: FocusEvent) => {
+        if (region.path !== "bodyMarkdown") return;
+        const nextTarget = event.relatedTarget;
+        if (nextTarget && element.contains(nextTarget as Node)) return;
+        refreshArticleControlsRef.current();
+      };
       const keydown = (event: KeyboardEvent) => {
         if (event.key === "Escape") {
           const previous = focusSnapshotRef.current.get(id);
@@ -724,15 +734,47 @@ export function CmsEditor() {
       element.addEventListener("focus", focus);
       element.addEventListener("click", focus);
       element.addEventListener("input", input);
+      element.addEventListener("blur", blur);
       element.addEventListener("keydown", keydown);
       element.addEventListener("paste", paste);
       cleanups.push(() => {
         element.removeEventListener("focus", focus);
         element.removeEventListener("click", focus);
         element.removeEventListener("input", input);
+        element.removeEventListener("blur", blur);
         element.removeEventListener("keydown", keydown);
         element.removeEventListener("paste", paste);
       });
+
+      if (region.path === "bodyMarkdown") {
+        let controlsCleanup: () => void = () => undefined;
+        const refreshControls = () => {
+          controlsCleanup();
+          controlsCleanup = installArticleBodyControls(doc, element, {
+            insert: (type, boundaryIndex, insertLabel) => {
+              const draftValue = dirtyRef.current[id];
+              const current =
+                typeof draftValue === "string"
+                  ? draftValue
+                  : readPath(fragmentsRef.current[fragmentId], path);
+              const insertionPoints = articleBodyInsertionPoints(current);
+              const insertAt = insertionPoints[boundaryIndex] ?? current.length;
+              setNewWorkOpen(false);
+              setDrawer(null);
+              setSelectedRegionId(id);
+              openMediaComposer(region, type, undefined, insertAt, insertLabel);
+            },
+          });
+        };
+        refreshArticleControlsRef.current = refreshControls;
+        refreshControls();
+        cleanups.push(() => {
+          controlsCleanup();
+          if (refreshArticleControlsRef.current === refreshControls) {
+            refreshArticleControlsRef.current = () => undefined;
+          }
+        });
+      }
     }
 
     if (workCollection && pageId === "home") {
@@ -950,14 +992,20 @@ export function CmsEditor() {
     });
   }
 
-  function openMediaComposer(region: CmsRegion, type: ArticleMediaType, media?: ArticleMediaBlock) {
-    const textarea = markdownTextareaRef.current;
+  function openMediaComposer(
+    region: CmsRegion,
+    type: ArticleMediaType,
+    media?: ArticleMediaBlock,
+    insertAt?: number,
+    insertLabel?: string,
+  ) {
     setMediaComposer({
       alignment: media?.alignment || (media?.placement === "hero" ? "wide" : "center"),
       alt: media?.alt || "",
       caption: media?.caption || "",
       editingId: media?.id,
-      insertAt: textarea?.selectionStart ?? valueForRegion(region).length,
+      insertAt: insertAt ?? valueForRegion(region).length,
+      insertLabel,
       placement: media?.placement || "inline",
       src: media?.src || "",
       type: media?.type || type,
@@ -1003,7 +1051,7 @@ export function CmsEditor() {
       const current = valueForRegion(region);
       const next = composer.editingId
         ? replaceArticleMedia(current, media)
-        : insertArticleMediaAtEditorPosition(current, media, composer.insertAt);
+        : insertArticleMedia(current, media, composer.insertAt);
       updateArticleMarkdown(region, next, media.placement === "hero");
       setMediaComposer(null);
       showToast(composer.editingId ? "Media updated" : "Media added to draft");
@@ -1817,88 +1865,83 @@ export function CmsEditor() {
             {selectedRegion.kind === "text" ? (
               selectedRegion.path === "bodyMarkdown" ? (
                 <div className="cms-markdown-editor">
-                  <div
-                    className="cms-markdown-toolbar"
-                    role="toolbar"
-                    aria-label="Article formatting"
-                  >
-                    <MarkdownTool
-                      label="Section heading"
-                      onClick={() => formatArticleMarkdown(selectedRegion, "h2")}
-                    >
-                      <Heading2 size={16} />
-                    </MarkdownTool>
-                    <MarkdownTool
-                      label="Subheading"
-                      onClick={() => formatArticleMarkdown(selectedRegion, "h3")}
-                    >
-                      <Heading3 size={16} />
-                    </MarkdownTool>
-                    <MarkdownTool
-                      label="Bold"
-                      onClick={() => formatArticleMarkdown(selectedRegion, "bold")}
-                    >
-                      <Bold size={16} />
-                    </MarkdownTool>
-                    <MarkdownTool
-                      label="Italic"
-                      onClick={() => formatArticleMarkdown(selectedRegion, "italic")}
-                    >
-                      <Italic size={16} />
-                    </MarkdownTool>
-                    <MarkdownTool
-                      label="Link"
-                      onClick={() => formatArticleMarkdown(selectedRegion, "link")}
-                    >
-                      <Link2 size={16} />
-                    </MarkdownTool>
-                    <MarkdownTool
-                      label="Bulleted list"
-                      onClick={() => formatArticleMarkdown(selectedRegion, "bullet")}
-                    >
-                      <List size={16} />
-                    </MarkdownTool>
-                    <MarkdownTool
-                      label="Numbered list"
-                      onClick={() => formatArticleMarkdown(selectedRegion, "numbered")}
-                    >
-                      <ListOrdered size={16} />
-                    </MarkdownTool>
-                    <MarkdownTool
-                      label="Quote"
-                      onClick={() => formatArticleMarkdown(selectedRegion, "quote")}
-                    >
-                      <Quote size={16} />
-                    </MarkdownTool>
-                  </div>
-                  <label className="cms-inspector__field">
-                    <span>Article Markdown</span>
-                    <textarea
-                      ref={markdownTextareaRef}
-                      rows={18}
-                      value={selectedEditorMarkdown}
-                      onChange={(event) =>
-                        updateArticleMarkdown(
-                          selectedRegion,
-                          articleMarkdownFromEditor(event.target.value, selectedArticleMedia),
-                        )
-                      }
-                    />
-                  </label>
-                  <div className="cms-media-actions">
-                    <button
-                      type="button"
-                      onClick={() => openMediaComposer(selectedRegion, "image")}
-                    >
-                      <ImagePlus size={16} /> Add image
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openMediaComposer(selectedRegion, "video")}
-                    >
-                      <Video size={16} /> Add video
-                    </button>
-                  </div>
+                  <p className="cms-inspector__hint">
+                    Edit the text directly on the page. Use the + controls between sections to add
+                    images or video exactly where they belong.
+                  </p>
+                  <details className="cms-markdown-advanced">
+                    <summary>Formatting and Markdown</summary>
+                    <div className="cms-markdown-advanced__body">
+                      <div
+                        className="cms-markdown-toolbar"
+                        role="toolbar"
+                        aria-label="Article formatting"
+                      >
+                        <MarkdownTool
+                          label="Section heading"
+                          onClick={() => formatArticleMarkdown(selectedRegion, "h2")}
+                        >
+                          <Heading2 size={16} />
+                        </MarkdownTool>
+                        <MarkdownTool
+                          label="Subheading"
+                          onClick={() => formatArticleMarkdown(selectedRegion, "h3")}
+                        >
+                          <Heading3 size={16} />
+                        </MarkdownTool>
+                        <MarkdownTool
+                          label="Bold"
+                          onClick={() => formatArticleMarkdown(selectedRegion, "bold")}
+                        >
+                          <Bold size={16} />
+                        </MarkdownTool>
+                        <MarkdownTool
+                          label="Italic"
+                          onClick={() => formatArticleMarkdown(selectedRegion, "italic")}
+                        >
+                          <Italic size={16} />
+                        </MarkdownTool>
+                        <MarkdownTool
+                          label="Link"
+                          onClick={() => formatArticleMarkdown(selectedRegion, "link")}
+                        >
+                          <Link2 size={16} />
+                        </MarkdownTool>
+                        <MarkdownTool
+                          label="Bulleted list"
+                          onClick={() => formatArticleMarkdown(selectedRegion, "bullet")}
+                        >
+                          <List size={16} />
+                        </MarkdownTool>
+                        <MarkdownTool
+                          label="Numbered list"
+                          onClick={() => formatArticleMarkdown(selectedRegion, "numbered")}
+                        >
+                          <ListOrdered size={16} />
+                        </MarkdownTool>
+                        <MarkdownTool
+                          label="Quote"
+                          onClick={() => formatArticleMarkdown(selectedRegion, "quote")}
+                        >
+                          <Quote size={16} />
+                        </MarkdownTool>
+                      </div>
+                      <label className="cms-inspector__field">
+                        <span>Article Markdown</span>
+                        <textarea
+                          ref={markdownTextareaRef}
+                          rows={18}
+                          value={selectedEditorMarkdown}
+                          onChange={(event) =>
+                            updateArticleMarkdown(
+                              selectedRegion,
+                              articleMarkdownFromEditor(event.target.value, selectedArticleMedia),
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                  </details>
                   <section className="cms-media-list" aria-label="Article media">
                     <header>
                       <strong>Media</strong>
@@ -2016,6 +2059,12 @@ export function CmsEditor() {
               </button>
             </header>
             <div className="cms-page-form">
+              {mediaComposer.insertLabel && !mediaComposer.editingId ? (
+                <p className="cms-media-destination">
+                  <span>Insert location</span>
+                  <strong>After {mediaComposer.insertLabel}</strong>
+                </p>
+              ) : null}
               <label className="cms-upload-control">
                 <ImageUp size={17} />
                 <span>
@@ -2105,23 +2154,30 @@ export function CmsEditor() {
                   }
                 />
               </label>
-              <div className="cms-media-options">
-                <label>
-                  <span>Placement</span>
-                  <select
-                    value={mediaComposer.placement}
-                    onChange={(event) =>
-                      setMediaComposer((current) =>
-                        current
-                          ? { ...current, placement: event.target.value as ArticleMediaPlacement }
-                          : current,
-                      )
-                    }
-                  >
-                    <option value="inline">Inline</option>
-                    <option value="hero">Hero</option>
-                  </select>
-                </label>
+              <div
+                className={`cms-media-options${mediaComposer.insertLabel ? " cms-media-options--single" : ""}`}
+              >
+                {!mediaComposer.insertLabel ? (
+                  <label>
+                    <span>Placement</span>
+                    <select
+                      value={mediaComposer.placement}
+                      onChange={(event) =>
+                        setMediaComposer((current) =>
+                          current
+                            ? {
+                                ...current,
+                                placement: event.target.value as ArticleMediaPlacement,
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      <option value="inline">Inline</option>
+                      <option value="hero">Hero</option>
+                    </select>
+                  </label>
+                ) : null}
                 <label>
                   <span>Alignment</span>
                   <select
@@ -2563,7 +2619,13 @@ function companionsFor(selected: CmsRegion, manifest: CmsManifest): CmsRegion[] 
 }
 
 function editableValue(element: HTMLElement, region: CmsRegion, turndown: TurndownService) {
-  if (region.path === "bodyMarkdown") return turndown.turndown(element.innerHTML).trim();
+  if (region.path === "bodyMarkdown") {
+    const clone = element.cloneNode(true) as HTMLElement;
+    for (const control of clone.querySelectorAll("[data-cms-article-insert-control]")) {
+      control.remove();
+    }
+    return turndown.turndown(clone.innerHTML).trim();
+  }
   const clone = element.cloneNode(true) as HTMLElement;
   for (const decorative of clone.querySelectorAll('[aria-hidden="true"]')) decorative.remove();
   return (clone.textContent || "").replace(/\s+/g, " ").trim();
@@ -2706,6 +2768,224 @@ function currentWorkDirtyState(
   if (sameValue(items, baseline)) delete next[collection.id];
   else next[collection.id] = items;
   return next;
+}
+
+function installArticleBodyControls(
+  doc: Document,
+  body: HTMLElement,
+  handlers: {
+    insert: (type: ArticleMediaType, boundaryIndex: number, insertLabel: string) => void;
+  },
+) {
+  for (const existing of body.querySelectorAll("[data-cms-article-insert-control]")) {
+    existing.remove();
+  }
+
+  const style = doc.createElement("style");
+  style.dataset.cmsArticleInsertStyles = "true";
+  style.textContent = `
+    html.cms-inline-preview .cms-article-insert-control {
+      position: relative;
+      z-index: 30;
+      height: 18px;
+      margin: -9px 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      pointer-events: none;
+    }
+    html.cms-inline-preview .cms-article-insert-control__rail {
+      position: absolute;
+      top: 50%;
+      left: -48px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transform: translateY(-50%);
+      pointer-events: auto;
+    }
+    html.cms-inline-preview .cms-article-insert-control button {
+      min-width: 34px;
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #bdc9c4;
+      border-radius: 999px;
+      background: #fbfcfa;
+      color: #193630;
+      box-shadow: 0 4px 14px rgb(19 43 39 / 10%);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 720;
+      line-height: 1;
+      cursor: pointer;
+      transition: 160ms ease;
+      transition-property: opacity, border-color, background-color, color, transform;
+    }
+    html.cms-inline-preview .cms-article-insert-control__trigger {
+      width: 34px;
+      padding: 0;
+      opacity: .22;
+      font-size: 22px;
+      font-weight: 400;
+    }
+    html.cms-inline-preview .cms-article-insert-control:hover .cms-article-insert-control__trigger,
+    html.cms-inline-preview .cms-article-insert-control:focus-within .cms-article-insert-control__trigger,
+    html.cms-inline-preview .cms-article-insert-control.is-open .cms-article-insert-control__trigger,
+    html.cms-inline-preview .body > :not([data-cms-article-insert-control]):hover + .cms-article-insert-control .cms-article-insert-control__trigger,
+    html.cms-inline-preview .article-prose > :not([data-cms-article-insert-control]):hover + .cms-article-insert-control .cms-article-insert-control__trigger {
+      opacity: 1;
+      border-color: #ff7d61;
+      color: #c84634;
+      transform: scale(1.04);
+    }
+    html.cms-inline-preview .cms-article-insert-control__menu {
+      position: absolute;
+      top: 50%;
+      right: 41px;
+      display: flex;
+      gap: 5px;
+      padding: 4px;
+      border: 1px solid #bdc9c4;
+      border-radius: 6px;
+      background: #fbfcfa;
+      box-shadow: 0 8px 24px rgb(19 43 39 / 16%);
+      transform: translateY(-50%);
+    }
+    html.cms-inline-preview .cms-article-insert-control__menu[hidden] { display: none; }
+    html.cms-inline-preview .cms-article-insert-control__menu button {
+      min-width: auto;
+      min-height: 34px;
+      padding: 0 11px;
+      border-radius: 4px;
+      box-shadow: none;
+    }
+    html.cms-inline-preview .cms-article-insert-control button:hover,
+    html.cms-inline-preview .cms-article-insert-control button:focus-visible {
+      border-color: #ff7d61;
+      outline: 2px solid rgb(255 125 97 / 24%);
+      outline-offset: 2px;
+      background: #fff6f3;
+      color: #b83c2d;
+    }
+    @media (max-width: 700px) {
+      html.cms-inline-preview .cms-article-insert-control__rail { left: -6px; }
+      html.cms-inline-preview .cms-article-insert-control__menu {
+        right: auto;
+        left: 51px;
+      }
+      html.cms-inline-preview .cms-article-insert-control__trigger {
+        min-width: 44px;
+        min-height: 44px;
+        opacity: .7;
+      }
+      html.cms-inline-preview .cms-article-insert-control__menu button { min-height: 44px; }
+    }
+  `;
+  doc.head.append(style);
+
+  const cleanups: Array<() => void> = [];
+  const controls: HTMLElement[] = [];
+  const contentBlocks = Array.from(body.children).filter(
+    (element) => !element.hasAttribute("data-cms-article-insert-control"),
+  ) as HTMLElement[];
+
+  const closeMenus = () => {
+    for (const control of controls) {
+      control.classList.remove("is-open");
+      const menu = control.querySelector<HTMLElement>(".cms-article-insert-control__menu");
+      const trigger = control.querySelector<HTMLButtonElement>(
+        ".cms-article-insert-control__trigger",
+      );
+      if (menu) menu.hidden = true;
+      trigger?.setAttribute("aria-expanded", "false");
+    }
+  };
+
+  contentBlocks.forEach((block, boundaryIndex) => {
+    const insertLabel = articleBlockLabel(block);
+    const control = doc.createElement("div");
+    control.className = "cms-article-insert-control";
+    control.dataset.cmsArticleInsertControl = String(boundaryIndex);
+    control.contentEditable = "false";
+    control.setAttribute("role", "group");
+    control.setAttribute("aria-label", `Insert media after ${insertLabel}`);
+
+    const rail = doc.createElement("div");
+    rail.className = "cms-article-insert-control__rail";
+    const trigger = doc.createElement("button");
+    trigger.type = "button";
+    trigger.className = "cms-article-insert-control__trigger";
+    trigger.textContent = "+";
+    trigger.title = `Add media after ${insertLabel}`;
+    trigger.setAttribute("aria-label", `Add media after ${insertLabel}`);
+    trigger.setAttribute("aria-expanded", "false");
+
+    const menu = doc.createElement("div");
+    menu.className = "cms-article-insert-control__menu";
+    menu.hidden = true;
+    menu.setAttribute("aria-label", `Choose media after ${insertLabel}`);
+
+    const activate = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const opening = menu.hidden;
+      closeMenus();
+      menu.hidden = !opening;
+      control.classList.toggle("is-open", opening);
+      trigger.setAttribute("aria-expanded", String(opening));
+    };
+    trigger.addEventListener("click", activate);
+    cleanups.push(() => trigger.removeEventListener("click", activate));
+
+    for (const [type, text] of [
+      ["image", "Image"],
+      ["video", "Video"],
+    ] as const) {
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      button.setAttribute("aria-label", `Add ${type} after ${insertLabel}`);
+      const choose = (event: Event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeMenus();
+        handlers.insert(type, boundaryIndex, insertLabel);
+      };
+      button.addEventListener("click", choose);
+      cleanups.push(() => button.removeEventListener("click", choose));
+      menu.append(button);
+    }
+
+    rail.append(trigger, menu);
+    control.append(rail);
+    block.after(control);
+    controls.push(control);
+    cleanups.push(() => control.remove());
+  });
+
+  const closeFromOutside = (event: Event) => {
+    const target = event.target as Element | null;
+    if (!target?.closest("[data-cms-article-insert-control]")) closeMenus();
+  };
+  doc.addEventListener("click", closeFromOutside);
+  cleanups.push(() => doc.removeEventListener("click", closeFromOutside));
+  cleanups.push(() => style.remove());
+
+  return () => {
+    for (const cleanup of cleanups) cleanup();
+  };
+}
+
+function articleBlockLabel(block: HTMLElement) {
+  const mediaLabel =
+    block.querySelector("figcaption")?.textContent ||
+    block.querySelector("img")?.getAttribute("alt") ||
+    block.querySelector("video")?.getAttribute("aria-label");
+  const text = (mediaLabel || block.textContent || block.tagName.toLowerCase())
+    .replace(/\s+/g, " ")
+    .trim();
+  const shortened = text.length > 54 ? `${text.slice(0, 51).trimEnd()}…` : text;
+  return `“${shortened || "article section"}”`;
 }
 
 function installCurrentWorkControls(
@@ -3026,6 +3306,12 @@ function createArticleTurndownService() {
       const directive = (node as HTMLElement).getAttribute("data-article-media-directive");
       return directive ? `\n\n${directive}\n\n` : "";
     },
+  });
+  service.addRule("cmsArticleInsertControl", {
+    filter: (node) =>
+      node.nodeName === "DIV" &&
+      (node as HTMLElement).hasAttribute("data-cms-article-insert-control"),
+    replacement: () => "",
   });
   return service;
 }

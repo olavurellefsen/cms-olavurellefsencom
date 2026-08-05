@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type ArticleMediaBlock,
+  articleBodyInsertionPoints,
   articleMarkdownForEditor,
   articleMarkdownFromEditor,
   articleMediaBlocks,
@@ -63,6 +64,34 @@ describe("article media directives", () => {
     expect(articleMarkdownForEditor(inserted)).toBe(
       "Before\n\n{{media:1 · Image · The list begins here.}}\n\nAfter",
     );
+  });
+
+  it("maps visible article blocks to exact markdown insertion points", () => {
+    const hero = { ...image, id: "media-hero", placement: "hero" as const };
+    const inline = { ...image, id: "media-inline" };
+    const markdown = [
+      "<!-- media: private-planning-file.jpg -->",
+      articleMediaDirective(hero),
+      "## First section",
+      "Opening paragraph.",
+      articleMediaDirective(inline),
+      "> Closing thought.",
+    ].join("\n\n");
+
+    const points = articleBodyInsertionPoints(markdown);
+
+    expect(points).toHaveLength(4);
+    expect(markdown.slice(0, points[0])).toMatch(/## First section$/);
+    expect(markdown.slice(0, points[1])).toMatch(/Opening paragraph\.$/);
+    expect(markdown.slice(0, points[2])).toMatch(/usable-media:[^\s]+ -->$/);
+    expect(markdown.slice(0, points[3])).toMatch(/> Closing thought\.$/);
+
+    const inserted = insertArticleMedia(markdown, { ...image, id: "media-inserted" }, points[1]);
+    expect(articleMediaBlocks(inserted).map((media) => media.id)).toEqual([
+      "media-hero",
+      "media-inserted",
+      "media-inline",
+    ]);
   });
 
   it("renders useful draft formatting, captions, and video controls", () => {

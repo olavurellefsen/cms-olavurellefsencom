@@ -2142,6 +2142,51 @@ html.cms-editing body > .site-footer {
   gap: 12px;
 }
 
+.cms-markdown-advanced {
+  overflow: hidden;
+  border: 1px solid #c8d3cf;
+  border-radius: 5px;
+  background: #f8faf8;
+}
+
+.cms-markdown-advanced summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px;
+  color: #34443f;
+  font-size: 12px;
+  font-weight: 740;
+  cursor: pointer;
+  list-style: none;
+}
+
+.cms-markdown-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.cms-markdown-advanced summary::after {
+  color: #71807b;
+  content: "+";
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.cms-markdown-advanced[open] summary {
+  border-bottom: 1px solid #c8d3cf;
+}
+
+.cms-markdown-advanced[open] summary::after {
+  content: "−";
+}
+
+.cms-markdown-advanced__body {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
 .cms-markdown-toolbar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -2153,7 +2198,6 @@ html.cms-editing body > .site-footer {
 }
 
 .cms-markdown-toolbar button,
-.cms-media-actions button,
 .cms-media-card > button {
   min-height: 36px;
   display: inline-flex;
@@ -2182,18 +2226,6 @@ html.cms-editing body > .site-footer {
     SFMono-Regular,
     Menlo,
     monospace;
-}
-
-.cms-media-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px;
-}
-
-.cms-media-actions button {
-  font: inherit;
-  font-size: 12px;
-  font-weight: 720;
 }
 
 .cms-media-list {
@@ -2678,6 +2710,30 @@ html.cms-inline-preview .cms-work-collection-actions p {
   font-weight: 500;
 }
 
+.cms-media-destination {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #f0c1b7;
+  border-radius: 5px;
+  background: #fff7f4;
+  color: #53615d;
+  font-size: 12px;
+}
+
+.cms-media-destination span {
+  color: #c54a37;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cms-media-destination strong {
+  color: #263330;
+}
+
 .cms-media-preview {
   display: grid;
   gap: 8px;
@@ -2742,6 +2798,10 @@ html.cms-inline-preview .cms-work-collection-actions p {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+.cms-media-options--single {
+  grid-template-columns: 1fr;
 }
 
 .cms-media-modal > footer {

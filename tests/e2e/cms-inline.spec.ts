@@ -406,13 +406,29 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   const articleInspector = page.getByRole("complementary", {
     name: "Selected element settings",
   });
+  await expect(
+    articleInspector.getByText(
+      "Edit the text directly on the page. Use the + controls between sections to add images or video exactly where they belong.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await articleInspector.locator("summary").click();
   const markdownField = articleInspector.getByLabel("Article Markdown");
   await markdownField.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(0, 0));
   await articleInspector.getByRole("button", { name: "Section heading" }).click();
   await expect(markdownField).toHaveValue(/^## Section heading/);
 
-  await articleInspector.getByRole("button", { name: "Add image" }).click();
+  const draftHeadingInsert = draftPreview.getByRole("group", {
+    name: "Insert media after “Draft heading”",
+  });
+  await draftHeadingInsert.getByRole("button", { name: "Add media after “Draft heading”" }).click();
+  await page.screenshot({
+    path: testInfo.outputPath("cms-article-insertion-menu.png"),
+    fullPage: true,
+  });
+  await draftHeadingInsert.getByRole("button", { name: "Add image after “Draft heading”" }).click();
   const imageDialog = page.getByRole("dialog", { name: "Add image" });
+  await expect(imageDialog.getByText("After “Draft heading”", { exact: true })).toBeVisible();
   await imageDialog.locator('input[type="file"]').setInputFiles({
     name: "IMG_3284.png",
     mimeType: "image/png",
@@ -432,13 +448,25 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   });
   await imageDialog.getByLabel("Alternative text").fill("A Faroese lake below the mountains");
   await imageDialog.getByLabel("Caption").fill("The lake list begins here.");
-  await imageDialog.getByLabel("Placement").selectOption("hero");
   await imageDialog.getByLabel("Alignment").selectOption("wide");
   await imageDialog.getByRole("button", { name: "Add media" }).click();
   await expect(
     draftPreview.getByRole("img", { name: "A Faroese lake below the mountains" }),
   ).toBeVisible();
   await expect(draftPreview.getByText("The lake list begins here.", { exact: true })).toBeVisible();
+  const articleBlockOrder = await draftPreview
+    .locator('[data-usable-cms-path="bodyMarkdown"]')
+    .evaluate((element) =>
+      Array.from(element.children)
+        .filter((child) => !child.hasAttribute("data-cms-article-insert-control"))
+        .map((child) => `${child.tagName}:${child.textContent?.trim() || ""}`),
+    );
+  expect(articleBlockOrder).toEqual([
+    "H2:Section heading",
+    "H2:Draft heading",
+    "FIGURE:The lake list begins here.",
+    "P:This content must only appear after broker authorization.",
+  ]);
 
   await draftPreview.getByRole("textbox", { name: "Edit Article body" }).click();
   await articleInspector.getByRole("button", { name: "Edit The lake list begins here." }).click();
@@ -447,8 +475,19 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await editImageDialog.getByRole("button", { name: "Save media" }).click();
   await expect(draftPreview.getByText("An edited lake caption.", { exact: true })).toBeVisible();
 
-  await draftPreview.getByRole("textbox", { name: "Edit Article body" }).click();
-  await articleInspector.getByRole("button", { name: "Add video" }).click();
+  const finalParagraphInsert = draftPreview.getByRole("group", {
+    name: "Insert media after “This content must only appear after broker authoriz…”",
+  });
+  await finalParagraphInsert
+    .getByRole("button", {
+      name: "Add media after “This content must only appear after broker authoriz…”",
+    })
+    .click();
+  await finalParagraphInsert
+    .getByRole("button", {
+      name: "Add video after “This content must only appear after broker authoriz…”",
+    })
+    .click();
   const videoDialog = page.getByRole("dialog", { name: "Add video" });
   await videoDialog.locator('input[type="file"]').setInputFiles({
     name: "lake.mp4",
@@ -500,7 +539,6 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
     .toBe(true);
   await expect(page.getByRole("button", { name: "Page is not published yet" })).toBeDisabled();
   await page.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(page.getByText("Page published", { exact: true })).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -513,4 +551,5 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
       }),
     )
     .toBe(true);
+  await expect(page.getByRole("button", { name: "Published", exact: true })).toBeDisabled();
 });
