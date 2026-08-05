@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { expect, test } from "@playwright/test";
 import manifest from "../../cms/manifest.json" with { type: "json" };
 import binding from "../../cms/site-binding.json" with { type: "json" };
@@ -122,6 +123,18 @@ test("CMS offers a fresh login when content access expires during startup", asyn
 test("CMS edits the real page inline and preserves broker workflows", async ({
   page,
 }, testInfo) => {
+  const sharp = createRequire(import.meta.url)("sharp");
+  const oversizedImage = await sharp({
+    create: {
+      width: 2000,
+      height: 1500,
+      channels: 3,
+      background: { r: 77, g: 121, b: 98 },
+    },
+  })
+    .png()
+    .toBuffer();
+
   await page.route("**/broker.js", async (route) => {
     await route.fulfill({
       contentType: "application/javascript",
@@ -150,7 +163,13 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
             return { revision: { id: "published-revision" } };
           },
           upload: async (file, input) => {
-            window.__cmsCalls.push({ operation: "upload", fileType: file.type, input });
+            window.__cmsCalls.push({
+              operation: "upload",
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+              input
+            });
             return { url: "https://cms.usable.dev/api/sites/test/assets/uploaded-media" };
           },
           versions: async () => ({
@@ -421,7 +440,25 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   const draftHeadingInsert = draftPreview.getByRole("group", {
     name: "Insert media after “Draft heading”",
   });
+  await page.getByRole("button", { name: "Mobile preview" }).click();
   await draftHeadingInsert.getByRole("button", { name: "Add media after “Draft heading”" }).click();
+  const mobileMediaMenu = draftHeadingInsert.locator(".cms-article-insert-control__menu");
+  await expect(mobileMediaMenu).toBeVisible();
+  const mobileMenuBounds = await mobileMediaMenu.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return {
+      bottom: bounds.bottom,
+      left: bounds.left,
+      right: bounds.right,
+      top: bounds.top,
+      viewportHeight: element.ownerDocument.documentElement.clientHeight,
+      viewportWidth: element.ownerDocument.documentElement.clientWidth,
+    };
+  });
+  expect(mobileMenuBounds.left).toBeGreaterThanOrEqual(0);
+  expect(mobileMenuBounds.top).toBeGreaterThanOrEqual(0);
+  expect(mobileMenuBounds.right).toBeLessThanOrEqual(mobileMenuBounds.viewportWidth);
+  expect(mobileMenuBounds.bottom).toBeLessThanOrEqual(mobileMenuBounds.viewportHeight);
   await page.screenshot({
     path: testInfo.outputPath("cms-article-insertion-menu.png"),
     fullPage: true,
@@ -432,15 +469,14 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await imageDialog.locator('input[type="file"]').setInputFiles({
     name: "IMG_3284.png",
     mimeType: "image/png",
-    buffer: Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-      "base64",
-    ),
+    buffer: oversizedImage,
   });
+  await expect(imageDialog.getByText(/Optimized for the web:/)).toBeVisible();
+  await expect(imageDialog.getByText(/1440×1080/)).toBeVisible();
   const imagePreview = imageDialog.getByRole("img", { name: "Selected image preview" });
   await expect(imagePreview).toHaveAttribute("src", /^blob:/);
   await expect(
-    imageDialog.getByRole("figure").getByText("IMG_3284.png", { exact: true }),
+    imageDialog.getByRole("figure").getByText("IMG_3284.webp", { exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("cms-image-upload-preview.png"),
@@ -450,6 +486,36 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await imageDialog.getByLabel("Caption").fill("The lake list begins here.");
   await imageDialog.getByLabel("Alignment").selectOption("wide");
   await imageDialog.getByRole("button", { name: "Add media" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const calls = (
+          window as Window & {
+            __cmsCalls?: Array<{
+              fileName?: string;
+              fileSize?: number;
+              fileType?: string;
+              operation: string;
+            }>;
+          }
+        ).__cmsCalls;
+        return calls?.find((call) => call.operation === "upload" && call.fileType === "image/webp");
+      }),
+    )
+    .toMatchObject({
+      fileName: "IMG_3284.webp",
+      fileType: "image/webp",
+    });
+  const uploadedImageBytes = await page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __cmsCalls?: Array<{ fileSize?: number; fileType?: string; operation: string }>;
+        }
+      ).__cmsCalls?.find((call) => call.operation === "upload" && call.fileType === "image/webp")
+        ?.fileSize,
+  );
+  expect(uploadedImageBytes).toBeLessThan(oversizedImage.length);
   await expect(
     draftPreview.getByRole("img", { name: "A Faroese lake below the mountains" }),
   ).toBeVisible();
