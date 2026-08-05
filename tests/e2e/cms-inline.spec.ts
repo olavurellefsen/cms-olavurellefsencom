@@ -83,6 +83,42 @@ test("CMS can refresh an expired Usable login", async ({ page }) => {
     .toBe(true);
 });
 
+test("CMS offers a fresh login when content access expires during startup", async ({ page }) => {
+  await page.route("**/broker.js", async (route) => {
+    await route.fulfill({
+      contentType: "application/javascript",
+      body: `
+        window.__cmsCalls = [];
+        window.usableCmsBroker = {
+          session: async () => ({
+            signedIn: true,
+            authorized: true,
+            user: { email: "olavur@ellefsen.fo" },
+            capabilities: { edit: true }
+          }),
+          pages: async () => ({ pages: [] }),
+          content: async () => {
+            const error = new Error("Unable to read target fragment: 401");
+            error.status = 401;
+            throw error;
+          },
+          login: async (returnTo, options) => {
+            window.__cmsCalls.push({ operation: "login", returnTo, options });
+          }
+        };
+      `,
+    });
+  });
+
+  await page.goto("http://localhost:3000/?cms=1");
+  await expect(
+    page.getByText("Your Usable login may have expired. Sign in again to refresh access.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in again" })).toBeVisible();
+});
+
 test("CMS edits the real page inline and preserves broker workflows", async ({
   page,
 }, testInfo) => {

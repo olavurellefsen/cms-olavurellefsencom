@@ -407,8 +407,13 @@ export function CmsEditor() {
         restoredDraftRef.current = true;
       } catch (nextError) {
         if (!cancelled) {
-          setError(messageFrom(nextError));
-          setSaveStatus("error");
+          if (isCmsAuthenticationError(nextError)) {
+            setError("");
+            setStatus("unauthorized");
+          } else {
+            setError(messageFrom(nextError));
+            setSaveStatus("error");
+          }
         }
       }
     }
@@ -2785,6 +2790,14 @@ function renderCurrentWorkPreview(
 
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "The CMS request failed.";
+}
+
+function isCmsAuthenticationError(error: unknown): boolean {
+  if (typeof error === "object" && error && "status" in error && error.status === 401) {
+    return true;
+  }
+
+  return /(?:^|\D)401(?:\D|$)/.test(messageFrom(error));
 }
 
 function mergeChanges(changes: CmsChange[], required: CmsChange[]) {
