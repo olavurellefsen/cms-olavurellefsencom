@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   type ArticleMediaBlock,
+  articleMediaDirective,
   firstArticleHeroMedia,
   parseArticleMarkdown,
 } from "@/lib/content/article-media";
@@ -43,6 +44,7 @@ export function ArticleMedia({
     <figure
       className={`article-media article-media--${media.alignment}${hero ? " article-media--hero" : ""}`}
       data-article-media-id={media.id}
+      data-article-media-directive={articleMediaDirective(media)}
     >
       {media.type === "video" ? (
         // biome-ignore lint/a11y/useMediaCaption: CMS videos may be silent/ambient; a VTT transcript field is not part of this media block yet.

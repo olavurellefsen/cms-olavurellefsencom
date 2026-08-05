@@ -46,6 +46,34 @@ export function articleMediaBlocks(markdown: string): ArticleMediaBlock[] {
     .map((segment) => segment.value);
 }
 
+export function articleBodyInsertionPoints(markdown: string): number[] {
+  const points: number[] = [];
+  const pieces = markdown.split(/(\n[\t ]*\n+)/);
+  let offset = 0;
+
+  for (const piece of pieces) {
+    if (!piece || /^\n[\t ]*\n+$/.test(piece)) {
+      offset += piece.length;
+      continue;
+    }
+
+    const trailingWhitespace = piece.length - piece.trimEnd().length;
+    const value = piece.trim();
+    const blockEnd = offset + piece.length - trailingWhitespace;
+    const parsed = parseArticleMarkdown(value);
+    const media = parsed.length === 1 && parsed[0]?.type === "media" ? parsed[0].value : undefined;
+    const hiddenComment = /^<!--[\s\S]*-->$/.test(value);
+
+    if (media?.placement === "inline" || (value && !hiddenComment && media?.placement !== "hero")) {
+      points.push(blockEnd);
+    }
+
+    offset += piece.length;
+  }
+
+  return points;
+}
+
 export function articleMarkdownForEditor(markdown: string): string {
   let index = 0;
   return markdown.replace(mediaDirectivePattern, (directive, encoded: string) => {
