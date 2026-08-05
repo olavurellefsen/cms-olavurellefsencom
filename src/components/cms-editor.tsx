@@ -54,6 +54,11 @@ import {
   renderArticleMediaPreview,
   replaceArticleMedia,
 } from "@/lib/content/article-media";
+import {
+  type CmsImagePreparation,
+  formatUploadBytes,
+  prepareCmsImageUpload,
+} from "@/lib/media/image-upload";
 
 type CmsRegion = {
   id: string;
@@ -216,6 +221,7 @@ type MediaComposer = {
   caption: string;
   editingId?: string;
   file?: File;
+  imagePreparation?: CmsImagePreparation;
   insertAt: number;
   insertLabel?: string;
   placement: ArticleMediaPlacement;
@@ -258,6 +264,7 @@ export function CmsEditor() {
   const [chatSending, setChatSending] = useState(false);
   const [mediaComposer, setMediaComposer] = useState<MediaComposer | null>(null);
   const [mediaSaving, setMediaSaving] = useState(false);
+  const [mediaPreparing, setMediaPreparing] = useState(false);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState("");
   const [failedMediaPreviewUrl, setFailedMediaPreviewUrl] = useState("");
   const [chatLog, setChatLog] = useState<ChatEntry[]>([
@@ -276,6 +283,7 @@ export function CmsEditor() {
   const attachPreviewRef = useRef<() => void>(() => undefined);
   const previewAttachTimerRef = useRef<number | undefined>(undefined);
   const refreshArticleControlsRef = useRef<() => void>(() => undefined);
+  const mediaFilePreparationRef = useRef(0);
   const workRemovalUndoTimerRef = useRef<number | undefined>(undefined);
   const previewLoadedAtRef = useRef(0);
   const dirtyRef = useRef(dirty);
@@ -950,7 +958,8 @@ export function CmsEditor() {
     if (!brokerRef.current || !session?.capabilities?.upload) return;
     setSaveStatus("saving");
     try {
-      const uploaded = await brokerRef.current.upload(file, {
+      const preparation = await prepareCmsImageUpload(file);
+      const uploaded = await brokerRef.current.upload(preparation.file, {
         regionId: region.id,
         title: region.label,
       });
@@ -959,7 +968,7 @@ export function CmsEditor() {
       registerRegion(region);
       updateRegionRef.current(region.id, value);
       applyValueToPreview(region, value);
-      showToast("Image uploaded");
+      showToast(preparation.optimized ? "Image optimized and uploaded" : "Image uploaded");
     } catch (nextError) {
       setError(messageFrom(nextError));
       setSaveStatus("error");
@@ -999,6 +1008,8 @@ export function CmsEditor() {
     insertAt?: number,
     insertLabel?: string,
   ) {
+    mediaFilePreparationRef.current += 1;
+    setMediaPreparing(false);
     setMediaComposer({
       alignment: media?.alignment || (media?.placement === "hero" ? "wide" : "center"),
       alt: media?.alt || "",
@@ -1011,6 +1022,35 @@ export function CmsEditor() {
       type: media?.type || type,
     });
     setError("");
+  }
+
+  function closeMediaComposer() {
+    mediaFilePreparationRef.current += 1;
+    setMediaPreparing(false);
+    setMediaComposer(null);
+  }
+
+  async function prepareMediaFile(file: File, type: ArticleMediaType) {
+    const requestId = ++mediaFilePreparationRef.current;
+    setError("");
+    if (type !== "image") {
+      setMediaPreparing(false);
+      setMediaComposer((current) => (current ? { ...current, file } : current));
+      return;
+    }
+
+    setMediaPreparing(true);
+    try {
+      const imagePreparation = await prepareCmsImageUpload(file);
+      if (mediaFilePreparationRef.current !== requestId) return;
+      setMediaComposer((current) =>
+        current ? { ...current, file: imagePreparation.file, imagePreparation } : current,
+      );
+    } catch (nextError) {
+      if (mediaFilePreparationRef.current === requestId) setError(messageFrom(nextError));
+    } finally {
+      if (mediaFilePreparationRef.current === requestId) setMediaPreparing(false);
+    }
   }
 
   async function saveArticleMedia(region: CmsRegion) {
@@ -1053,7 +1093,7 @@ export function CmsEditor() {
         ? replaceArticleMedia(current, media)
         : insertArticleMedia(current, media, composer.insertAt);
       updateArticleMarkdown(region, next, media.placement === "hero");
-      setMediaComposer(null);
+      closeMediaComposer();
       showToast(composer.editingId ? "Media updated" : "Media added to draft");
     } catch (nextError) {
       setError(messageFrom(nextError));
@@ -2051,7 +2091,7 @@ export function CmsEditor() {
               <button
                 type="button"
                 className="cms-icon-button"
-                onClick={() => setMediaComposer(null)}
+                onClick={closeMediaComposer}
                 aria-label="Close media editor"
                 title="Close media editor"
               >
@@ -2083,11 +2123,41 @@ export function CmsEditor() {
                   }
                   onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file)
-                      setMediaComposer((current) => (current ? { ...current, file } : current));
+                    if (file) void prepareMediaFile(file, mediaComposer.type);
                   }}
                 />
               </label>
+              {mediaPreparing ? (
+                <output className="cms-media-optimization" aria-live="polite">
+                  <LoaderCircle className="cms-spin" size={15} />
+                  Preparing image for the web…
+                </output>
+              ) : mediaComposer.imagePreparation ? (
+                <output className="cms-media-optimization" aria-live="polite">
+                  <Check size={15} />
+                  <span>
+                    {mediaComposer.imagePreparation.optimized ? (
+                      <>
+                        Optimized for the web:{" "}
+                        {formatUploadBytes(mediaComposer.imagePreparation.originalBytes)} →{" "}
+                        {formatUploadBytes(mediaComposer.imagePreparation.uploadBytes)}
+                        {mediaComposer.imagePreparation.width &&
+                        mediaComposer.imagePreparation.height
+                          ? " · " +
+                            mediaComposer.imagePreparation.width +
+                            "×" +
+                            mediaComposer.imagePreparation.height
+                          : ""}
+                      </>
+                    ) : (
+                      <>
+                        Ready to upload ·{" "}
+                        {formatUploadBytes(mediaComposer.imagePreparation.uploadBytes)}
+                      </>
+                    )}
+                  </span>
+                </output>
+              ) : null}
               {mediaImagePreviewSrc ? (
                 <figure className="cms-media-preview">
                   <div className="cms-media-preview__canvas">
@@ -2204,25 +2274,27 @@ export function CmsEditor() {
               ) : null}
             </div>
             <footer>
-              <button
-                type="button"
-                className="cms-secondary-button"
-                onClick={() => setMediaComposer(null)}
-              >
+              <button type="button" className="cms-secondary-button" onClick={closeMediaComposer}>
                 Cancel
               </button>
               <button
                 type="button"
                 className="cms-primary-button"
                 onClick={() => void saveArticleMedia(selectedRegion)}
-                disabled={mediaSaving}
+                disabled={mediaSaving || mediaPreparing}
               >
-                {mediaSaving ? (
+                {mediaSaving || mediaPreparing ? (
                   <LoaderCircle className="cms-spin" size={16} />
                 ) : (
                   <ImagePlus size={16} />
                 )}
-                {mediaSaving ? "Uploading" : mediaComposer.editingId ? "Save media" : "Add media"}
+                {mediaPreparing
+                  ? "Preparing"
+                  : mediaSaving
+                    ? "Uploading"
+                    : mediaComposer.editingId
+                      ? "Save media"
+                      : "Add media"}
               </button>
             </footer>
           </section>
@@ -2841,7 +2913,7 @@ function installArticleBodyControls(
     html.cms-inline-preview .cms-article-insert-control__menu {
       position: absolute;
       top: 50%;
-      right: 41px;
+      right: calc(100% + 55px);
       display: flex;
       gap: 5px;
       padding: 4px;
@@ -2850,6 +2922,7 @@ function installArticleBodyControls(
       background: #fbfcfa;
       box-shadow: 0 8px 24px rgb(19 43 39 / 16%);
       transform: translateY(-50%);
+      pointer-events: auto;
     }
     html.cms-inline-preview .cms-article-insert-control__menu[hidden] { display: none; }
     html.cms-inline-preview .cms-article-insert-control__menu button {
@@ -2870,15 +2943,24 @@ function installArticleBodyControls(
     @media (max-width: 700px) {
       html.cms-inline-preview .cms-article-insert-control__rail { left: -6px; }
       html.cms-inline-preview .cms-article-insert-control__menu {
-        right: auto;
-        left: 51px;
+        position: fixed;
+        z-index: 50;
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        top: auto;
+        justify-content: stretch;
+        transform: none;
       }
       html.cms-inline-preview .cms-article-insert-control__trigger {
         min-width: 44px;
         min-height: 44px;
         opacity: .7;
       }
-      html.cms-inline-preview .cms-article-insert-control__menu button { min-height: 44px; }
+      html.cms-inline-preview .cms-article-insert-control__menu button {
+        flex: 1;
+        min-height: 44px;
+      }
     }
   `;
   doc.head.append(style);
@@ -2956,8 +3038,8 @@ function installArticleBodyControls(
       menu.append(button);
     }
 
-    rail.append(trigger, menu);
-    control.append(rail);
+    rail.append(trigger);
+    control.append(rail, menu);
     block.after(control);
     controls.push(control);
     cleanups.push(() => control.remove());

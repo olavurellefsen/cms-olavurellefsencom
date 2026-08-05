@@ -2734,6 +2734,26 @@ html.cms-inline-preview .cms-work-collection-actions p {
   color: #263330;
 }
 
+.cms-media-optimization {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #c8d3cf;
+  border-radius: 5px;
+  background: #f3f7f4;
+  color: #42534e;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.cms-media-optimization svg {
+  flex: 0 0 auto;
+  color: #1f5a47;
+}
+
 .cms-media-preview {
   display: grid;
   gap: 8px;
