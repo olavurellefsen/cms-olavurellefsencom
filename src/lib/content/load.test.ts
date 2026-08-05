@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pageIdFromTags, parseFragmentContent } from "./load";
+import { isPublishedCmsPage, pageIdFromTags, parseFragmentContent } from "./load";
 import { articleContentSchema } from "./schema";
 
 describe("article schema", () => {
@@ -32,5 +32,13 @@ describe("CMS fragment parsing", () => {
       "article-current",
     );
     expect(pageIdFromTags(["usable-cms-page", "page:article-fallback"])).toBe("article-fallback");
+  });
+});
+
+describe("CMS page visibility", () => {
+  it("keeps unpublished page references out of public page directories", () => {
+    const page = { id: "article-draft", title: "Draft", path: "/writing/draft" };
+    expect(isPublishedCmsPage({ ...page, status: "draft" })).toBe(false);
+    expect(isPublishedCmsPage({ ...page, status: "active" })).toBe(true);
   });
 });

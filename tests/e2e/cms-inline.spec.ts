@@ -4,6 +4,14 @@ import binding from "../../cms/site-binding.json" with { type: "json" };
 import site from "../../content/site.json" with { type: "json" };
 
 const pageContent = Object.fromEntries(site.pages.map((page) => [page.id, page.content]));
+const draftFragmentId = "00000000-0000-4000-8000-000000000905";
+const draftPage = {
+  id: "article-unpublished-e2e",
+  title: "Unpublished E2E note",
+  path: "/writing/unpublished-e2e",
+  fragmentId: draftFragmentId,
+  status: "draft",
+};
 const fragments = {
   [binding.globalFragmentId]: site.global,
   ...Object.fromEntries(
@@ -12,6 +20,18 @@ const fragments = {
       pageContent[pageId as keyof typeof pageContent],
     ]),
   ),
+  [draftFragmentId]: {
+    type: "article",
+    title: "Unpublished E2E note",
+    slug: "unpublished-e2e",
+    summary: "A secure draft preview used by the editor test.",
+    publishedAt: "2026-08-05",
+    updatedAt: "2026-08-05",
+    status: "draft",
+    topics: ["Testing"],
+    canonicalUrl: "https://www.olavurellefsen.com/writing/unpublished-e2e",
+    bodyMarkdown: "## Draft heading\n\nThis content must only appear after broker authorization.",
+  },
 };
 
 test("CMS can refresh an expired Usable login", async ({ page }) => {
@@ -104,10 +124,14 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
             window.__cmsCalls.push({ operation: "createPage", input });
             return { page: { id: input.id, title: input.title, path: input.path } };
           },
+          publishPage: async (pageId) => {
+            window.__cmsCalls.push({ operation: "publishPage", pageId });
+            return { page: { ...${JSON.stringify(draftPage)}, status: "active" } };
+          },
           deletePage: async (pageId) => {
             window.__cmsCalls.push({ operation: "deletePage", pageId });
           },
-          pages: async () => ({ pages: [] }),
+          pages: async () => ({ pages: [${JSON.stringify(draftPage)}] }),
           chat: async (message, input) => {
             window.__cmsCalls.push({ operation: "chat", message, input });
             return {
@@ -322,4 +346,36 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   const homePreview = page.frameLocator('iframe[title="Home inline editor"]');
   await homePreview.getByRole("link", { name: "All writing" }).click();
   await expect(page).toHaveURL(/\/writing\?cms=1$/);
+
+  const publicDraftResponse = await page.request.get(
+    "http://localhost:3000/writing/unpublished-e2e",
+  );
+  expect(publicDraftResponse.status()).toBe(404);
+  expect(await publicDraftResponse.text()).not.toContain(
+    "This content must only appear after broker authorization.",
+  );
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("http://localhost:3000/writing/unpublished-e2e?cms=1");
+  await expect(page.getByText("Draft · Usable CMS", { exact: true })).toBeVisible();
+  const draftPreview = page.frameLocator('iframe[title="Unpublished E2E note inline editor"]');
+  await expect(draftPreview.getByText("Unpublished draft", { exact: true })).toBeVisible();
+  await expect(draftPreview.getByRole("textbox", { name: "Edit Article title" })).toHaveText(
+    "Unpublished E2E note",
+  );
+  await expect(page.getByRole("button", { name: "Page is not published yet" })).toBeDisabled();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByText("Page published", { exact: true })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const calls = (
+          window as Window & { __cmsCalls?: Array<{ operation: string; pageId?: string }> }
+        ).__cmsCalls;
+        return calls?.some(
+          (call) => call.operation === "publishPage" && call.pageId === "article-unpublished-e2e",
+        );
+      }),
+    )
+    .toBe(true);
 });
