@@ -109,7 +109,7 @@ function pageArray(payload: unknown): unknown[] {
   return [];
 }
 
-async function fetchCmsPageReferences(): Promise<CmsPageReference[]> {
+async function fetchCmsPageReferences(noStore = false): Promise<CmsPageReference[]> {
   const token = process.env.USABLE_CMS_SERVER_TOKEN;
   if (!token || (process.env.CMS_CONTENT_SOURCE ?? "usable") === "fallback") return [];
   const cmsOrigin = (process.env.NEXT_PUBLIC_USABLE_CMS_ORIGIN || "https://cms.usable.dev").replace(
@@ -122,7 +122,9 @@ async function fetchCmsPageReferences(): Promise<CmsPageReference[]> {
   try {
     const response = await fetch(`${cmsOrigin}/api/sites/${siteId}/pages`, {
       headers: usableHeaders(token),
-      next: { revalidate: 60, tags: [`usable-cms-pages-${siteId}`] },
+      ...(noStore
+        ? { cache: "no-store" as const }
+        : { next: { revalidate: 60, tags: [`usable-cms-pages-${siteId}`] } }),
     });
     if (!response.ok) return [];
     return pageArray(await response.json())
@@ -133,7 +135,7 @@ async function fetchCmsPageReferences(): Promise<CmsPageReference[]> {
   }
 }
 
-async function fetchWorkspacePageReferences(): Promise<CmsPageReference[]> {
+async function fetchWorkspacePageReferences(noStore = false): Promise<CmsPageReference[]> {
   const token = process.env.USABLE_CMS_SERVER_TOKEN;
   const workspaceId = process.env.USABLE_CMS_WORKSPACE_ID || siteBinding.workspaceId;
   if (!token || !workspaceId || (process.env.CMS_CONTENT_SOURCE ?? "usable") === "fallback")
@@ -144,7 +146,9 @@ async function fetchWorkspacePageReferences(): Promise<CmsPageReference[]> {
     const query = new URLSearchParams({ workspaceId, tags: "usable-cms-page", limit: "100" });
     const response = await fetch(`${baseUrl}/api/memory-fragments?${query}`, {
       headers: usableHeaders(token),
-      next: { revalidate: 60, tags: [`usable-cms-workspace-pages-${workspaceId}`] },
+      ...(noStore
+        ? { cache: "no-store" as const }
+        : { next: { revalidate: 60, tags: [`usable-cms-workspace-pages-${workspaceId}`] } }),
     });
     if (!response.ok) return [];
     const payload = (await response.json()) as { fragments?: FragmentListItem[] };
@@ -163,6 +167,14 @@ async function fetchWorkspacePageReferences(): Promise<CmsPageReference[]> {
         if (content.success) {
           path = `/writing/${content.data.slug}`;
           title = content.data.title;
+          references.push({
+            id: pageId,
+            title,
+            path,
+            fragmentId,
+            status: content.data.status === "published" ? "active" : "draft",
+          });
+          continue;
         }
       } catch {
         // A fragment can still be resolved by its stable cms-page tag.
@@ -181,7 +193,7 @@ async function fetchWorkspacePageReferences(): Promise<CmsPageReference[]> {
   }
 }
 
-export const getCmsPageDirectory = cache(async (): Promise<CmsPageReference[]> => {
+async function loadCmsPageDirectory(noStore = false): Promise<CmsPageReference[]> {
   const fallbackReferences: CmsPageReference[] = fallbackSite.pages.map((page, order) => ({
     id: page.id,
     title: page.title,
@@ -191,8 +203,8 @@ export const getCmsPageDirectory = cache(async (): Promise<CmsPageReference[]> =
     status: "active",
   }));
   const [cmsPages, workspacePages] = await Promise.all([
-    fetchCmsPageReferences(),
-    fetchWorkspacePageReferences(),
+    fetchCmsPageReferences(noStore),
+    fetchWorkspacePageReferences(noStore),
   ]);
   const pages = new Map(fallbackReferences.map((page) => [page.id, page]));
   for (const page of [...workspacePages, ...cmsPages]) {
@@ -201,7 +213,22 @@ export const getCmsPageDirectory = cache(async (): Promise<CmsPageReference[]> =
   return [...pages.values()]
     .filter((page) => page.status !== "archived" && page.status !== "hidden")
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.title.localeCompare(b.title));
-});
+}
+
+const getAllCachedCmsPages = cache(() => loadCmsPageDirectory(false));
+
+export function isPublishedCmsPage(page: CmsPageReference) {
+  return page.status !== "draft" && page.status !== "archived" && page.status !== "hidden";
+}
+
+export const getCmsPageDirectory = cache(
+  async (): Promise<CmsPageReference[]> =>
+    (await getAllCachedCmsPages()).filter(isPublishedCmsPage),
+);
+
+export async function getCmsEditorPageDirectory(): Promise<CmsPageReference[]> {
+  return loadCmsPageDirectory(true);
+}
 
 export const getGlobalContent = cache(async (): Promise<LoadedValue<GlobalContent>> => {
   const fragmentId =

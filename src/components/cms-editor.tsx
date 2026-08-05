@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TurndownService from "turndown";
-import { articleRegions } from "@/lib/cms/article-regions";
+import { articleRegionId, articleRegions } from "@/lib/cms/article-regions";
 import type { CmsPageReference } from "@/lib/cms/binding";
 
 type CmsRegion = {
@@ -103,8 +103,15 @@ type CmsBroker = {
     fragments: Array<{ id: string; content: unknown }>;
     manifest?: CmsManifest;
   }>;
-  pages(input?: Record<string, unknown>): Promise<{ pages?: CmsPageReference[] }>;
+  pages(input?: Record<string, unknown>): Promise<{
+    pages?: CmsPageReference[];
+    pageTemplates?: CmsPageTemplate[];
+  }>;
   createPage(input: Record<string, unknown>): Promise<{
+    page?: CmsPageReference;
+    manifest?: CmsManifest;
+  }>;
+  publishPage(pageId: string): Promise<{
     page?: CmsPageReference;
     manifest?: CmsManifest;
   }>;
@@ -292,17 +299,32 @@ export function CmsEditor() {
         const manifestResponse = await fetch("/api/cms/manifest", { cache: "no-store" });
         if (!manifestResponse.ok) throw new Error("The CMS manifest could not be loaded.");
         const localManifest = (await manifestResponse.json()) as CmsManifest;
+        const pageDirectory = await brokerRef.current?.pages();
+        const brokerPages = normalizeManagedPages(
+          pageDirectory?.pages,
+          localManifest.pages || fallbackPages,
+        );
+        const resolvedPage = brokerPages.find((page) => page.path === window.location.pathname);
+        const resolvedPageId = resolvedPage?.id || pageId;
+        const manifestWithPages: CmsManifest = {
+          ...localManifest,
+          pages: brokerPages,
+          pageTemplates: pageDirectory?.pageTemplates?.length
+            ? pageDirectory.pageTemplates
+            : localManifest.pageTemplates,
+        };
         const fragmentIds = Array.from(
           new Set(
             [
-              ...localManifest.regions.filter(
-                (region) => region.scope === "global" || region.pageId === pageId,
+              ...manifestWithPages.regions.filter(
+                (region) => region.scope === "global" || region.pageId === resolvedPageId,
               ),
-              ...(localManifest.collections || []).filter(
+              ...(manifestWithPages.collections || []).filter(
                 (collection) => collection.id === "home.selectedWork",
               ),
             ]
               .map((region) => region.fragmentId as string | undefined)
+              .concat(resolvedPage?.fragmentId)
               .filter((id): id is string => Boolean(id)),
           ),
         );
@@ -311,9 +333,9 @@ export function CmsEditor() {
           workspaceId: localManifest.workspaceId,
         });
         const nextManifest = content?.manifest
-          ? mergeManifests(localManifest, content.manifest)
-          : localManifest;
-        const nextPages = normalizeManagedPages(nextManifest.pages, fallbackPages);
+          ? mergeManifests(manifestWithPages, content.manifest)
+          : manifestWithPages;
+        const nextPages = normalizeManagedPages(nextManifest.pages, brokerPages);
         const nextFragments = Object.fromEntries(
           (content?.fragments || []).map((fragment) => [
             fragment.id,
@@ -325,10 +347,12 @@ export function CmsEditor() {
         setManifest(nextManifest);
         setManagedPages(nextPages);
         const matchedPage = nextPages.find((page) => page.path === window.location.pathname);
-        if (matchedPage && matchedPage.id !== pageId) setPageId(matchedPage.id);
+        const nextPageId = matchedPage?.id || resolvedPageId;
+        if (nextPageId !== pageId) setPageId(nextPageId);
+        if (matchedPage) setPublicPath(matchedPage.path);
         setFragments(nextFragments);
-        setRegistry(registryFromManifest(nextManifest, pageId));
-        draftKeyRef.current = `usable-cms:draft:${nextManifest.siteId}:${pageId}`;
+        setRegistry(registryFromManifest(nextManifest, nextPageId));
+        draftKeyRef.current = `usable-cms:draft:${nextManifest.siteId}:${nextPageId}`;
         const savedDraft = window.localStorage.getItem(draftKeyRef.current);
         if (savedDraft) {
           const parsedDraft = JSON.parse(savedDraft) as Record<string, CmsDirtyValue>;
@@ -713,25 +737,66 @@ export function CmsEditor() {
 
   async function publish() {
     const broker = brokerRef.current;
-    if (!broker || !manifest || !changes.length) return;
+    const activePage = managedPages.find((page) => page.id === pageId);
+    const publishingPage = activePage?.status === "draft";
+    if (!broker || !manifest || (!changes.length && !publishingPage)) return;
     setError("");
     setSaveStatus("publishing");
     try {
+      const today = new Date().toISOString().slice(0, 10);
+      const publicationChanges: CmsChange[] =
+        publishingPage && activePage?.fragmentId
+          ? [
+              {
+                kind: "fragment",
+                targetId: activePage.fragmentId,
+                path: "status",
+                afterRef: JSON.stringify("published"),
+              },
+              {
+                kind: "fragment",
+                targetId: activePage.fragmentId,
+                path: "publishedAt",
+                afterRef: JSON.stringify(today),
+              },
+              {
+                kind: "fragment",
+                targetId: activePage.fragmentId,
+                path: "updatedAt",
+                afterRef: JSON.stringify(today),
+              },
+            ]
+          : [];
+      const publishedChanges = mergeChanges(changes, publicationChanges);
       await broker.publish(
-        revisionId
+        revisionId && !publishingPage
           ? { revisionId }
           : {
               workspaceId: manifest.workspaceId,
               summary: `Publish ${managedPages.find((page) => page.id === pageId)?.title || pageId}`,
-              changes,
+              changes: publishedChanges,
             },
       );
+      if (publishingPage && activePage) {
+        await broker.publishPage(activePage.id);
+        setManagedPages((current) =>
+          current.map((page) => (page.id === activePage.id ? { ...page, status: "active" } : page)),
+        );
+      }
       setFragments((current) => {
         const next = { ...current };
         for (const [regionId, value] of Object.entries(dirty)) {
           const region = registry[regionId];
           if (!region?.fragmentId || !region.path) continue;
           next[region.fragmentId] = writePath(next[region.fragmentId], region.path, value);
+        }
+        for (const change of publicationChanges) {
+          if (!change.path) continue;
+          next[change.targetId] = writePath(
+            next[change.targetId],
+            change.path,
+            JSON.parse(change.afterRef) as CmsDirtyValue,
+          );
         }
         return next;
       });
@@ -740,7 +805,7 @@ export function CmsEditor() {
       setRevisionId(undefined);
       clearWorkRemovalUndo();
       setSaveStatus("published");
-      showToast("Site published");
+      showToast(publishingPage ? "Page published" : "Site published");
     } catch (nextError) {
       setError(messageFrom(nextError));
       setSaveStatus("error");
@@ -845,7 +910,7 @@ export function CmsEditor() {
       summary: newPage.summary.trim(),
       publishedAt: today,
       updatedAt: today,
-      status: "published",
+      status: "draft",
       topics: newPage.topics
         .split(",")
         .map((topic) => topic.trim())
@@ -861,6 +926,7 @@ export function CmsEditor() {
         id,
         title: content.title,
         path,
+        status: "draft",
         content,
         templateId: "founder-note",
         addToNavigation: false,
@@ -870,8 +936,8 @@ export function CmsEditor() {
       setManagedPages((current) => normalizeManagedPages([created], current));
       setNewPage(emptyNewPage());
       setNewPageOpen(false);
-      showToast("Page created");
-      window.location.href = `/cms?page=${encodeURIComponent(created.id || id)}`;
+      showToast("Draft page created");
+      window.location.href = `${created.path || path}?cms=1`;
     } catch (nextError) {
       setError(messageFrom(nextError));
     } finally {
@@ -1174,6 +1240,12 @@ export function CmsEditor() {
   );
   const workItems = currentWorkItems();
   const writingPages = managedPages.filter((page) => page.path.startsWith("/writing/"));
+  const activePage = managedPages.find((page) => page.id === pageId);
+  const isUnpublishedPage = activePage?.status === "draft";
+  const unpublishedPreview =
+    isUnpublishedPage && activePage?.fragmentId
+      ? draftArticlePreviewDocument(activePage, fragments[activePage.fragmentId])
+      : undefined;
 
   return (
     <main className="cms-workspace" aria-label="Usable CMS inline editor">
@@ -1183,8 +1255,8 @@ export function CmsEditor() {
             ÓE
           </span>
           <span>
-            <strong>{managedPages.find((page) => page.id === pageId)?.title}</strong>
-            <small>Usable CMS</small>
+            <strong>{activePage?.title}</strong>
+            <small>{isUnpublishedPage ? "Draft · Usable CMS" : "Usable CMS"}</small>
           </span>
         </div>
 
@@ -1256,7 +1328,7 @@ export function CmsEditor() {
             ) : (
               <Check size={15} />
             )}
-            {saveLabel(saveStatus)}
+            {saveLabel(saveStatus, isUnpublishedPage)}
           </span>
           <button
             type="button"
@@ -1268,27 +1340,39 @@ export function CmsEditor() {
           >
             <Undo2 size={17} />
           </button>
-          <a
-            className="cms-icon-button"
-            href={publicPath}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="View published page"
-            title="View published page"
-          >
-            <ExternalLink size={17} />
-          </a>
+          {isUnpublishedPage ? (
+            <button
+              type="button"
+              className="cms-icon-button"
+              disabled
+              aria-label="Page is not published yet"
+              title="Publish this page before opening its public URL"
+            >
+              <ExternalLink size={17} />
+            </button>
+          ) : (
+            <a
+              className="cms-icon-button"
+              href={publicPath}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="View published page"
+              title="View published page"
+            >
+              <ExternalLink size={17} />
+            </a>
+          )}
           <button
             type="button"
             className="cms-publish-button"
             onClick={() => void publish()}
-            disabled={!changes.length || saveStatus === "publishing"}
+            disabled={(!changes.length && !isUnpublishedPage) || saveStatus === "publishing"}
           >
             <Send size={16} />
             <span>
               {saveStatus === "publishing"
                 ? "Publishing"
-                : changes.length
+                : changes.length || isUnpublishedPage
                   ? "Publish"
                   : "Published"}
             </span>
@@ -1316,8 +1400,9 @@ export function CmsEditor() {
             <iframe
               key={previewNonce}
               ref={frameRef}
-              src={`${publicPath}?cms-preview=1`}
-              title={`${managedPages.find((page) => page.id === pageId)?.title || "Page"} inline editor`}
+              src={unpublishedPreview ? undefined : `${publicPath}?cms-preview=1`}
+              srcDoc={unpublishedPreview}
+              title={`${activePage?.title || "Page"} inline editor`}
               onLoad={handlePreviewLoad}
             />
           ) : null}
@@ -1425,7 +1510,10 @@ export function CmsEditor() {
                         >
                           <span>
                             <strong>{page.title}</strong>
-                            <small>{page.path}</small>
+                            <small>
+                              {page.status === "draft" ? "Draft · " : ""}
+                              {page.path}
+                            </small>
                           </span>
                         </button>
                         <button
@@ -1466,7 +1554,12 @@ export function CmsEditor() {
                         aria-current={page.id === pageId ? "page" : undefined}
                         onClick={() => navigateToPage(page.path)}
                       >
-                        <span>{page.title}</span>
+                        <span>
+                          {page.title}
+                          {page.status === "draft" ? (
+                            <small className="cms-page-status">Draft</small>
+                          ) : null}
+                        </span>
                         <ExternalLink size={15} />
                       </button>
                       {page.fragmentId && page.path.startsWith("/writing/") ? (
@@ -1735,8 +1828,8 @@ export function CmsEditor() {
               </button>
             </header>
             <p>
-              This creates one independently editable CMS Page fragment. The note is published
-              immediately and can be hidden later without deleting its fragment.
+              This creates one independently editable CMS Page fragment as an unpublished draft.
+              Review it in the editor, then publish it when it is ready.
             </p>
             <div className="cms-page-form">
               <label>
@@ -1816,7 +1909,7 @@ export function CmsEditor() {
                 ) : (
                   <Plus size={16} />
                 )}
-                {pageOperation === "creating" ? "Creating" : "Create page"}
+                {pageOperation === "creating" ? "Creating" : "Create draft"}
               </button>
             </footer>
           </section>
@@ -2271,13 +2364,118 @@ function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "The CMS request failed.";
 }
 
-function saveLabel(status: SaveStatus) {
+function mergeChanges(changes: CmsChange[], required: CmsChange[]) {
+  const merged = new Map(
+    changes.map((change) => [`${change.targetId}:${change.path || ""}`, change]),
+  );
+  for (const change of required) {
+    merged.set(`${change.targetId}:${change.path || ""}`, change);
+  }
+  return [...merged.values()];
+}
+
+function draftArticlePreviewDocument(
+  page: CmsPageReference,
+  content: Record<string, unknown> | undefined,
+) {
+  const fragmentId = page.fragmentId;
+  if (!fragmentId) return undefined;
+  const title = draftString(content?.title) || page.title;
+  const summary = draftString(content?.summary) || "Add a short summary for this founder note.";
+  const body = draftString(content?.bodyMarkdown) || "Start writing your founder note here.";
+  const heroImage =
+    content?.heroImage && typeof content.heroImage === "object"
+      ? (content.heroImage as Record<string, unknown>)
+      : undefined;
+  const heroSrc = draftString(heroImage?.src);
+  const heroAlt = draftString(heroImage?.alt) || "Draft article image";
+  const region = (field: string, label: string, kind: CmsRegion["kind"] = "text") =>
+    [
+      `data-usable-cms-region="${escapePreviewHtml(articleRegionId(page.id, field))}"`,
+      `data-usable-cms-path="${escapePreviewHtml(field)}"`,
+      `data-usable-cms-fragment-id="${escapePreviewHtml(fragmentId)}"`,
+      `data-usable-cms-kind="${kind}"`,
+      `data-usable-cms-label="${escapePreviewHtml(label)}"`,
+    ].join(" ");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="/" />
+    <style>
+      :root { color-scheme: light; font-family: ui-sans-serif, system-ui, sans-serif; background: #f2f5f1; color: #17211f; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: clamp(28px, 6vw, 88px); }
+      article { max-width: 920px; margin: 0 auto; }
+      .draft-label { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: #f1c86a; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+      header { padding-block: clamp(42px, 8vw, 100px) 48px; border-bottom: 1px solid #bcc8c2; }
+      h1 { max-width: 860px; margin: 26px 0 18px; font-family: ui-serif, Georgia, serif; font-size: clamp(44px, 8vw, 88px); font-weight: 500; line-height: .98; letter-spacing: -.04em; }
+      .summary { max-width: 720px; margin: 0; font-size: clamp(19px, 2vw, 25px); line-height: 1.5; color: #495753; }
+      figure { margin: 48px 0 0; }
+      img { display: block; width: 100%; max-height: 720px; object-fit: cover; border-radius: 18px; }
+      .body { max-width: 720px; margin: 56px auto; font-family: ui-serif, Georgia, serif; font-size: 20px; line-height: 1.72; }
+      .body h2, .body h3 { color: #17211f; line-height: 1.15; margin-top: 2.2em; }
+      .body p { margin: 0 0 1.25em; }
+      [data-cms-editable="text"]:focus, [data-cms-editable="image"]:focus { outline: 3px solid #d8654f; outline-offset: 6px; }
+    </style>
+  </head>
+  <body>
+    <article>
+      <header>
+        <span class="draft-label">Unpublished draft</span>
+        <h1 ${region("title", "Article title")}>${escapePreviewHtml(title)}</h1>
+        <p class="summary" ${region("summary", "Article summary")}>${escapePreviewHtml(summary)}</p>
+      </header>
+      ${
+        heroSrc
+          ? `<figure><img src="${escapePreviewHtml(heroSrc)}" alt="${escapePreviewHtml(heroAlt)}" ${region("heroImage.src", "Article image", "image")} /></figure>`
+          : ""
+      }
+      <div class="body" ${region("bodyMarkdown", "Article body")}>${renderDraftMarkdown(body)}</div>
+    </article>
+  </body>
+</html>`;
+}
+
+function draftString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function escapePreviewHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character] || character;
+  });
+}
+
+function renderDraftMarkdown(markdown: string) {
+  return markdown
+    .trim()
+    .split(/\n\s*\n/)
+    .map((block) => {
+      const value = escapePreviewHtml(block.trim());
+      if (value.startsWith("### ")) return `<h3>${value.slice(4)}</h3>`;
+      if (value.startsWith("## ")) return `<h2>${value.slice(3)}</h2>`;
+      return `<p>${value.replace(/\n/g, "<br />")}</p>`;
+    })
+    .join("");
+}
+
+function saveLabel(status: SaveStatus, unpublished = false) {
   if (status === "saving") return "Saving";
   if (status === "saved") return "Draft saved";
   if (status === "changed") return "Changed";
   if (status === "publishing") return "Publishing";
   if (status === "error") return "Needs attention";
-  return "Published";
+  return unpublished ? "Draft" : "Published";
 }
 
 function formatDate(value?: string) {
