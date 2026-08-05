@@ -113,7 +113,10 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
             window.__cmsCalls.push({ operation: "publish", input });
             return { revision: { id: "published-revision" } };
           },
-          upload: async () => ({ assetPath: "/images/olavur-ellefsen.png" }),
+          upload: async (file, input) => {
+            window.__cmsCalls.push({ operation: "upload", fileType: file.type, input });
+            return { url: "https://cms.usable.dev/api/sites/test/assets/uploaded-media" };
+          },
           versions: async () => ({
             versions: [{ id: "version-1", summary: "Published version", createdAt: "2026-08-02T10:00:00Z" }]
           }),
@@ -363,6 +366,86 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await expect(draftPreview.getByRole("textbox", { name: "Edit Article title" })).toHaveText(
     "Unpublished E2E note",
   );
+  await draftPreview.getByRole("textbox", { name: "Edit Article body" }).click();
+  const articleInspector = page.getByRole("complementary", {
+    name: "Selected element settings",
+  });
+  const markdownField = articleInspector.getByLabel("Article Markdown");
+  await markdownField.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(0, 0));
+  await articleInspector.getByRole("button", { name: "Section heading" }).click();
+  await expect(markdownField).toHaveValue(/^## Section heading/);
+
+  await articleInspector.getByRole("button", { name: "Add image" }).click();
+  const imageDialog = page.getByRole("dialog", { name: "Add image" });
+  await imageDialog.getByLabel("Or media URL").fill("/images/olavur-ellefsen.png");
+  await imageDialog.getByLabel("Alternative text").fill("A Faroese lake below the mountains");
+  await imageDialog.getByLabel("Caption").fill("The lake list begins here.");
+  await imageDialog.getByLabel("Placement").selectOption("hero");
+  await imageDialog.getByLabel("Alignment").selectOption("wide");
+  await imageDialog.getByRole("button", { name: "Add media" }).click();
+  await expect(
+    draftPreview.getByRole("img", { name: "A Faroese lake below the mountains" }),
+  ).toBeVisible();
+  await expect(draftPreview.getByText("The lake list begins here.", { exact: true })).toBeVisible();
+
+  await draftPreview.getByRole("textbox", { name: "Edit Article body" }).click();
+  await articleInspector.getByRole("button", { name: "Edit The lake list begins here." }).click();
+  const editImageDialog = page.getByRole("dialog", { name: "Edit image" });
+  await editImageDialog.getByLabel("Caption").fill("An edited lake caption.");
+  await editImageDialog.getByRole("button", { name: "Save media" }).click();
+  await expect(draftPreview.getByText("An edited lake caption.", { exact: true })).toBeVisible();
+
+  await draftPreview.getByRole("textbox", { name: "Edit Article body" }).click();
+  await articleInspector.getByRole("button", { name: "Add video" }).click();
+  const videoDialog = page.getByRole("dialog", { name: "Add video" });
+  await videoDialog.locator('input[type="file"]').setInputFiles({
+    name: "lake.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("video"),
+  });
+  await videoDialog.getByLabel("Accessible label").fill("Ten seconds beside the lake");
+  await videoDialog.getByLabel("Caption").fill("A short lake visit.");
+  await videoDialog.getByLabel("Alignment").selectOption("right");
+  await videoDialog.getByRole("button", { name: "Add media" }).click();
+  await expect(draftPreview.getByLabel("Ten seconds beside the lake")).toBeVisible();
+  await expect(draftPreview.getByText("A short lake visit.", { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("cms-article-media-editor.png"),
+    fullPage: true,
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const calls = (
+          window as Window & { __cmsCalls?: Array<{ fileType?: string; operation: string }> }
+        ).__cmsCalls;
+        return calls?.some((call) => call.operation === "upload" && call.fileType === "video/mp4");
+      }),
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const calls = (
+          window as Window & {
+            __cmsCalls?: Array<{
+              input?: { changes?: Array<{ afterRef?: string; path?: string }> };
+              operation: string;
+            }>;
+          }
+        ).__cmsCalls;
+        return calls
+          ?.filter((call) => call.operation === "draft")
+          .flatMap((call) => call.input?.changes || [])
+          .some(
+            (change) =>
+              change.path === "bodyMarkdown" &&
+              change.afterRef?.includes("usable-media%3A") === false &&
+              change.afterRef?.includes("usable-media:") === true,
+          );
+      }),
+    )
+    .toBe(true);
   await expect(page.getByRole("button", { name: "Page is not published yet" })).toBeDisabled();
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByText("Page published", { exact: true })).toBeVisible();

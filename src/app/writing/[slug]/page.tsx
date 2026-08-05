@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { ArticleDirectiveHero, ArticleMarkdown } from "@/components/article-markdown";
 import { articleRegionId } from "@/lib/cms/article-regions";
 import { cmsRegion } from "@/lib/cms/regions";
+import { firstArticleHeroMedia } from "@/lib/content/article-media";
 import { getArticleBySlug, getGlobalContent, getPublishedArticles } from "@/lib/content/load";
 import { safeJsonLd } from "@/lib/seo/json-ld";
 
@@ -32,6 +32,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const loaded = await getArticleBySlug(slug);
   if (!loaded || loaded.value.content.type !== "article") return {};
   const article = loaded.value.content;
+  const directiveHero = firstArticleHeroMedia(article.bodyMarkdown);
+  const socialImage = directiveHero?.type === "image" ? directiveHero : article.heroImage;
   return {
     title: article.title,
     description: article.summary,
@@ -44,7 +46,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       publishedTime: article.publishedAt,
       modifiedTime: article.updatedAt,
       tags: article.topics,
-      images: article.heroImage ? [{ url: article.heroImage.src, alt: article.heroImage.alt }] : [],
+      images: socialImage ? [{ url: socialImage.src, alt: socialImage.alt }] : [],
     },
   };
 }
@@ -54,6 +56,7 @@ export default async function ArticlePage({ params }: Props) {
   const [loaded, global] = await Promise.all([getArticleBySlug(slug), getGlobalContent()]);
   if (!loaded || loaded.value.content.type !== "article") notFound();
   const article = loaded.value.content;
+  const directiveHero = firstArticleHeroMedia(article.bodyMarkdown);
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -64,9 +67,12 @@ export default async function ArticlePage({ params }: Props) {
     mainEntityOfPage: article.canonicalUrl,
     author: { "@id": `${global.value.canonicalUrl}/#person` },
     publisher: { "@type": "Person", name: global.value.author.name },
-    image: article.heroImage
-      ? new URL(article.heroImage.src, global.value.canonicalUrl).toString()
-      : undefined,
+    image:
+      directiveHero?.type === "image"
+        ? new URL(directiveHero.src, global.value.canonicalUrl).toString()
+        : article.heroImage
+          ? new URL(article.heroImage.src, global.value.canonicalUrl).toString()
+          : undefined,
   };
 
   return (
@@ -107,7 +113,8 @@ export default async function ArticlePage({ params }: Props) {
             <p className="article-updated">Updated {formatDate(article.updatedAt)}</p>
           ) : null}
         </header>
-        {article.heroImage && article.showHeroImage ? (
+        <ArticleDirectiveHero markdown={article.bodyMarkdown} />
+        {article.heroImage && article.showHeroImage && !directiveHero ? (
           <figure className="article-hero">
             <Image
               src={article.heroImage.src}
@@ -141,7 +148,7 @@ export default async function ArticlePage({ params }: Props) {
               pageId: loaded.value.id,
             })}
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{article.bodyMarkdown}</ReactMarkdown>
+            <ArticleMarkdown markdown={article.bodyMarkdown} />
           </div>
         </div>
       </article>

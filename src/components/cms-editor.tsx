@@ -1,17 +1,27 @@
 "use client";
 
 import {
+  Bold,
   Check,
   ExternalLink,
+  Heading2,
+  Heading3,
   History,
+  ImagePlus,
   ImageUp,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
   ListPlus,
   LoaderCircle,
   LogIn,
   MessageSquare,
   Monitor,
   PanelLeft,
+  Pencil,
   Plus,
+  Quote,
   RotateCcw,
   Send,
   Settings2,
@@ -19,12 +29,29 @@ import {
   Tablet,
   Trash2,
   Undo2,
+  Video,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TurndownService from "turndown";
 import { articleRegionId, articleRegions } from "@/lib/cms/article-regions";
 import type { CmsPageReference } from "@/lib/cms/binding";
+import {
+  type ArticleMediaAlignment,
+  type ArticleMediaBlock,
+  type ArticleMediaPlacement,
+  type ArticleMediaType,
+  articleMarkdownForEditor,
+  articleMarkdownFromEditor,
+  articleMediaBlocks,
+  firstArticleHeroMedia,
+  insertArticleMediaAtEditorPosition,
+  removeArticleMedia,
+  renderArticleMarkdownPreview,
+  renderArticleMediaPreview,
+  replaceArticleMedia,
+} from "@/lib/content/article-media";
 
 type CmsRegion = {
   id: string;
@@ -181,6 +208,20 @@ type WorkRemovalUndo = {
   item: WorkItem;
 };
 
+type MediaComposer = {
+  alignment: ArticleMediaAlignment;
+  alt: string;
+  caption: string;
+  editingId?: string;
+  file?: File;
+  insertAt: number;
+  placement: ArticleMediaPlacement;
+  src: string;
+  type: ArticleMediaType;
+};
+
+type MarkdownFormat = "bold" | "bullet" | "h2" | "h3" | "italic" | "link" | "numbered" | "quote";
+
 export function CmsEditor() {
   const [active, setActive] = useState(false);
   const [pageId, setPageId] = useState("home");
@@ -212,6 +253,8 @@ export function CmsEditor() {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [chatSending, setChatSending] = useState(false);
+  const [mediaComposer, setMediaComposer] = useState<MediaComposer | null>(null);
+  const [mediaSaving, setMediaSaving] = useState(false);
   const [chatLog, setChatLog] = useState<ChatEntry[]>([
     {
       id: "welcome",
@@ -220,6 +263,7 @@ export function CmsEditor() {
     },
   ]);
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const markdownTextareaRef = useRef<HTMLTextAreaElement>(null);
   const brokerRef = useRef<CmsBroker | null>(null);
   const draftKeyRef = useRef("");
   const restoredDraftRef = useRef(false);
@@ -233,9 +277,7 @@ export function CmsEditor() {
   const registryRef = useRef(registry);
   const focusSnapshotRef = useRef(new Map<string, { html: string; value: string }>());
   const updateRegionRef = useRef<(regionId: string, value: string) => void>(() => undefined);
-  const turndownRef = useRef(
-    new TurndownService({ bulletListMarker: "-", codeBlockStyle: "fenced", headingStyle: "atx" }),
-  );
+  const turndownRef = useRef(createArticleTurndownService());
 
   dirtyRef.current = dirty;
   fragmentsRef.current = fragments;
@@ -509,7 +551,9 @@ export function CmsEditor() {
     if (!element) return;
     if (region.kind === "image" && element instanceof HTMLImageElement) element.src = value;
     else if (region.kind === "link" && element instanceof HTMLAnchorElement) element.href = value;
-    else if (region.path !== "bodyMarkdown") setEditableText(element, value);
+    else if (region.path === "bodyMarkdown")
+      element.innerHTML = renderArticleMarkdownPreview(value);
+    else setEditableText(element, value);
   }, []);
 
   useEffect(() => {
@@ -843,7 +887,7 @@ export function CmsEditor() {
         regionId: region.id,
         title: region.label,
       });
-      const value = uploaded.assetPath || uploaded.url;
+      const value = uploaded.url || absoluteCmsAssetUrl(uploaded.assetPath);
       if (!value) throw new Error("Usable did not return the uploaded asset path.");
       registerRegion(region);
       updateRegionRef.current(region.id, value);
@@ -853,6 +897,103 @@ export function CmsEditor() {
       setError(messageFrom(nextError));
       setSaveStatus("error");
     }
+  }
+
+  function updateArticleMarkdown(region: CmsRegion, value: string, refresh = false) {
+    updateRegion(region.id, value);
+    applyValueToPreview(region, value);
+    if (refresh) setPreviewNonce((current) => current + 1);
+  }
+
+  function formatArticleMarkdown(region: CmsRegion, format: MarkdownFormat) {
+    const textarea = markdownTextareaRef.current;
+    if (!textarea) return;
+    const currentRaw = valueForRegion(region);
+    const media = articleMediaBlocks(currentRaw);
+    const current = articleMarkdownForEditor(currentRaw);
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = current.slice(start, end);
+    const formatted = formatMarkdownSelection(format, selected);
+    const blockFormat = ["bullet", "h2", "h3", "numbered", "quote"].includes(format);
+    const suffix = !selected && blockFormat && current.slice(end).trim() ? "\n\n" : "";
+    const next = `${current.slice(0, start)}${formatted.value}${suffix}${current.slice(end)}`;
+    updateArticleMarkdown(region, articleMarkdownFromEditor(next, media));
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + formatted.selectionStart, start + formatted.selectionEnd);
+    });
+  }
+
+  function openMediaComposer(region: CmsRegion, type: ArticleMediaType, media?: ArticleMediaBlock) {
+    const textarea = markdownTextareaRef.current;
+    setMediaComposer({
+      alignment: media?.alignment || (media?.placement === "hero" ? "wide" : "center"),
+      alt: media?.alt || "",
+      caption: media?.caption || "",
+      editingId: media?.id,
+      insertAt: textarea?.selectionStart ?? valueForRegion(region).length,
+      placement: media?.placement || "inline",
+      src: media?.src || "",
+      type: media?.type || type,
+    });
+    setError("");
+  }
+
+  async function saveArticleMedia(region: CmsRegion) {
+    const broker = brokerRef.current;
+    const composer = mediaComposer;
+    if (!broker || !composer || mediaSaving) return;
+    if (!composer.file && !composer.src.trim()) {
+      setError("Choose a file or enter a media URL.");
+      return;
+    }
+    if (composer.type === "image" && !composer.alt.trim()) {
+      setError("Add alternative text for the image.");
+      return;
+    }
+
+    setMediaSaving(true);
+    setError("");
+    try {
+      let src = composer.src.trim();
+      if (composer.file) {
+        const uploaded = await broker.upload(composer.file, {
+          regionId: region.id,
+          title: composer.caption.trim() || composer.alt.trim() || composer.file.name,
+        });
+        src = uploaded.url || absoluteCmsAssetUrl(uploaded.assetPath) || "";
+      }
+      if (!src) throw new Error("Usable did not return a media URL.");
+
+      const media: ArticleMediaBlock = {
+        id: composer.editingId || `media-${globalThis.crypto?.randomUUID?.() || Date.now()}`,
+        type: composer.type,
+        src,
+        alt: composer.alt,
+        caption: composer.caption,
+        placement: composer.placement,
+        alignment: composer.alignment,
+      };
+      const current = valueForRegion(region);
+      const next = composer.editingId
+        ? replaceArticleMedia(current, media)
+        : insertArticleMediaAtEditorPosition(current, media, composer.insertAt);
+      updateArticleMarkdown(region, next, media.placement === "hero");
+      setMediaComposer(null);
+      showToast(composer.editingId ? "Media updated" : "Media added to draft");
+    } catch (nextError) {
+      setError(messageFrom(nextError));
+      setSaveStatus("error");
+    } finally {
+      setMediaSaving(false);
+    }
+  }
+
+  function deleteArticleMedia(region: CmsRegion, media: ArticleMediaBlock) {
+    const next = removeArticleMedia(valueForRegion(region), media.id);
+    updateArticleMarkdown(region, next, media.placement === "hero");
+    showToast("Media removed from draft");
   }
 
   function updateSecondaryRegion(region: CmsRegion, value: string) {
@@ -1177,6 +1318,10 @@ export function CmsEditor() {
     () => (selectedRegion && manifest ? companionsFor(selectedRegion, manifest) : []),
     [manifest, selectedRegion],
   );
+  const selectedBodyMarkdown =
+    selectedRegion?.path === "bodyMarkdown" ? valueForRegion(selectedRegion) : "";
+  const selectedArticleMedia = articleMediaBlocks(selectedBodyMarkdown);
+  const selectedEditorMarkdown = articleMarkdownForEditor(selectedBodyMarkdown);
 
   useEffect(() => {
     for (const region of companionRegions) registerRegion(region);
@@ -1242,9 +1387,12 @@ export function CmsEditor() {
   const writingPages = managedPages.filter((page) => page.path.startsWith("/writing/"));
   const activePage = managedPages.find((page) => page.id === pageId);
   const isUnpublishedPage = activePage?.status === "draft";
+  const unpublishedContent = activePage?.fragmentId
+    ? fragmentWithDirtyValues(activePage.fragmentId, fragments, registry, dirty)
+    : undefined;
   const unpublishedPreview =
     isUnpublishedPage && activePage?.fragmentId
-      ? draftArticlePreviewDocument(activePage, fragments[activePage.fragmentId])
+      ? draftArticlePreviewDocument(activePage, unpublishedContent)
       : undefined;
 
   return (
@@ -1643,14 +1791,133 @@ export function CmsEditor() {
           <div className="cms-inspector__body">
             {selectedRegion.kind === "text" ? (
               selectedRegion.path === "bodyMarkdown" ? (
-                <label className="cms-inspector__field">
-                  <span>Article Markdown</span>
-                  <textarea
-                    rows={20}
-                    value={valueForRegion(selectedRegion)}
-                    onChange={(event) => updateRegion(selectedRegion.id, event.target.value)}
-                  />
-                </label>
+                <div className="cms-markdown-editor">
+                  <div
+                    className="cms-markdown-toolbar"
+                    role="toolbar"
+                    aria-label="Article formatting"
+                  >
+                    <MarkdownTool
+                      label="Section heading"
+                      onClick={() => formatArticleMarkdown(selectedRegion, "h2")}
+                    >
+                      <Heading2 size={16} />
+                    </MarkdownTool>
+                    <MarkdownTool
+                      label="Subheading"
+                      onClick={() => formatArticleMarkdown(selectedRegion, "h3")}
+                    >
+                      <Heading3 size={16} />
+                    </MarkdownTool>
+                    <MarkdownTool
+                      label="Bold"
+                      onClick={() => formatArticleMarkdown(selectedRegion, "bold")}
+                    >
+                      <Bold size={16} />
+                    </MarkdownTool>
+                    <MarkdownTool
+                      label="Italic"
+                      onClick={() => formatArticleMarkdown(selectedRegion, "italic")}
+                    >
+                      <Italic size={16} />
+                    </MarkdownTool>
+                    <MarkdownTool
+                      label="Link"
+                      onClick={() => formatArticleMarkdown(selectedRegion, "link")}
+                    >
+                      <Link2 size={16} />
+                    </MarkdownTool>
+                    <MarkdownTool
+                      label="Bulleted list"
+                      onClick={() => formatArticleMarkdown(selectedRegion, "bullet")}
+                    >
+                      <List size={16} />
+                    </MarkdownTool>
+                    <MarkdownTool
+                      label="Numbered list"
+                      onClick={() => formatArticleMarkdown(selectedRegion, "numbered")}
+                    >
+                      <ListOrdered size={16} />
+                    </MarkdownTool>
+                    <MarkdownTool
+                      label="Quote"
+                      onClick={() => formatArticleMarkdown(selectedRegion, "quote")}
+                    >
+                      <Quote size={16} />
+                    </MarkdownTool>
+                  </div>
+                  <label className="cms-inspector__field">
+                    <span>Article Markdown</span>
+                    <textarea
+                      ref={markdownTextareaRef}
+                      rows={18}
+                      value={selectedEditorMarkdown}
+                      onChange={(event) =>
+                        updateArticleMarkdown(
+                          selectedRegion,
+                          articleMarkdownFromEditor(event.target.value, selectedArticleMedia),
+                        )
+                      }
+                    />
+                  </label>
+                  <div className="cms-media-actions">
+                    <button
+                      type="button"
+                      onClick={() => openMediaComposer(selectedRegion, "image")}
+                    >
+                      <ImagePlus size={16} /> Add image
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openMediaComposer(selectedRegion, "video")}
+                    >
+                      <Video size={16} /> Add video
+                    </button>
+                  </div>
+                  <section className="cms-media-list" aria-label="Article media">
+                    <header>
+                      <strong>Media</strong>
+                      <span>{selectedArticleMedia.length || "None yet"}</span>
+                    </header>
+                    {selectedArticleMedia.map((media) => (
+                      <article key={media.id} className="cms-media-card">
+                        <div className="cms-media-card__preview">
+                          {media.type === "video" ? (
+                            <Video size={20} />
+                          ) : (
+                            <Image src={media.src} alt="" width={48} height={42} unoptimized />
+                          )}
+                        </div>
+                        <span>
+                          <strong>
+                            {media.caption ||
+                              media.alt ||
+                              (media.type === "video" ? "Video" : "Image")}
+                          </strong>
+                          <small>
+                            {media.placement} · {media.alignment}
+                          </small>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openMediaComposer(selectedRegion, media.type, media)}
+                          aria-label={`Edit ${media.caption || media.alt || media.type}`}
+                          title="Edit media"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteArticleMedia(selectedRegion, media)}
+                          aria-label={`Remove ${media.caption || media.alt || media.type}`}
+                          title="Remove media"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </article>
+                    ))}
+                  </section>
+                </div>
               ) : (
                 <p className="cms-inspector__hint">
                   Type directly where the text appears on the page.
@@ -1696,6 +1963,162 @@ export function CmsEditor() {
             ))}
           </div>
         </aside>
+      ) : null}
+
+      {mediaComposer && selectedRegion?.path === "bodyMarkdown" ? (
+        <div className="cms-modal-backdrop" role="presentation">
+          <section
+            className="cms-page-modal cms-media-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="media-editor-title"
+          >
+            <header>
+              <div>
+                <span className="cms-kicker">Article media</span>
+                <h2 id="media-editor-title">
+                  {mediaComposer.editingId ? "Edit" : "Add"} {mediaComposer.type}
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="cms-icon-button"
+                onClick={() => setMediaComposer(null)}
+                aria-label="Close media editor"
+                title="Close media editor"
+              >
+                <X size={17} />
+              </button>
+            </header>
+            <div className="cms-page-form">
+              <label className="cms-upload-control">
+                <ImageUp size={17} />
+                <span>
+                  {mediaComposer.file
+                    ? mediaComposer.file.name
+                    : mediaComposer.editingId
+                      ? "Replace file (optional)"
+                      : "Choose file"}
+                </span>
+                <input
+                  type="file"
+                  accept={
+                    mediaComposer.type === "video"
+                      ? "video/mp4,video/quicktime,video/webm"
+                      : "image/avif,image/gif,image/jpeg,image/png,image/svg+xml,image/webp"
+                  }
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file)
+                      setMediaComposer((current) => (current ? { ...current, file } : current));
+                  }}
+                />
+              </label>
+              <label>
+                <span>Or media URL</span>
+                <input
+                  type="url"
+                  placeholder="https://"
+                  value={mediaComposer.src}
+                  onChange={(event) =>
+                    setMediaComposer((current) =>
+                      current ? { ...current, src: event.target.value } : current,
+                    )
+                  }
+                />
+              </label>
+              <label>
+                <span>
+                  {mediaComposer.type === "image" ? "Alternative text" : "Accessible label"}
+                </span>
+                <input
+                  value={mediaComposer.alt}
+                  onChange={(event) =>
+                    setMediaComposer((current) =>
+                      current ? { ...current, alt: event.target.value } : current,
+                    )
+                  }
+                />
+                <small>Describe the media for people using assistive technology.</small>
+              </label>
+              <label>
+                <span>Caption</span>
+                <textarea
+                  rows={3}
+                  value={mediaComposer.caption}
+                  onChange={(event) =>
+                    setMediaComposer((current) =>
+                      current ? { ...current, caption: event.target.value } : current,
+                    )
+                  }
+                />
+              </label>
+              <div className="cms-media-options">
+                <label>
+                  <span>Placement</span>
+                  <select
+                    value={mediaComposer.placement}
+                    onChange={(event) =>
+                      setMediaComposer((current) =>
+                        current
+                          ? { ...current, placement: event.target.value as ArticleMediaPlacement }
+                          : current,
+                      )
+                    }
+                  >
+                    <option value="inline">Inline</option>
+                    <option value="hero">Hero</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Alignment</span>
+                  <select
+                    value={mediaComposer.alignment}
+                    onChange={(event) =>
+                      setMediaComposer((current) =>
+                        current
+                          ? { ...current, alignment: event.target.value as ArticleMediaAlignment }
+                          : current,
+                      )
+                    }
+                  >
+                    <option value="center">Centered</option>
+                    <option value="wide">Wide</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                  </select>
+                </label>
+              </div>
+              {error ? (
+                <p className="cms-editor__error" role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="cms-secondary-button"
+                onClick={() => setMediaComposer(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="cms-primary-button"
+                onClick={() => void saveArticleMedia(selectedRegion)}
+                disabled={mediaSaving}
+              >
+                {mediaSaving ? (
+                  <LoaderCircle className="cms-spin" size={16} />
+                ) : (
+                  <ImagePlus size={16} />
+                )}
+                {mediaSaving ? "Uploading" : mediaComposer.editingId ? "Save media" : "Add media"}
+              </button>
+            </footer>
+          </section>
+        </div>
       ) : null}
 
       {newWorkOpen ? (
@@ -2383,6 +2806,7 @@ function draftArticlePreviewDocument(
   const title = draftString(content?.title) || page.title;
   const summary = draftString(content?.summary) || "Add a short summary for this founder note.";
   const body = draftString(content?.bodyMarkdown) || "Start writing your founder note here.";
+  const directiveHero = firstArticleHeroMedia(body);
   const heroImage =
     content?.heroImage && typeof content.heroImage === "object"
       ? (content.heroImage as Record<string, unknown>)
@@ -2414,10 +2838,19 @@ function draftArticlePreviewDocument(
       h1 { max-width: 860px; margin: 26px 0 18px; font-family: ui-serif, Georgia, serif; font-size: clamp(44px, 8vw, 88px); font-weight: 500; line-height: .98; letter-spacing: -.04em; }
       .summary { max-width: 720px; margin: 0; font-size: clamp(19px, 2vw, 25px); line-height: 1.5; color: #495753; }
       figure { margin: 48px 0 0; }
-      img { display: block; width: 100%; max-height: 720px; object-fit: cover; border-radius: 18px; }
+      img, video { display: block; width: 100%; max-height: 720px; object-fit: cover; border-radius: 18px; }
+      article > .article-media img, article > .article-media video { aspect-ratio: 16 / 9; object-fit: cover; }
+      figcaption { margin-top: 12px; color: #5a6864; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
       .body { max-width: 720px; margin: 56px auto; font-family: ui-serif, Georgia, serif; font-size: 20px; line-height: 1.72; }
       .body h2, .body h3 { color: #17211f; line-height: 1.15; margin-top: 2.2em; }
       .body p { margin: 0 0 1.25em; }
+      .body ul, .body ol { margin: 0 0 1.5em; padding-left: 1.4em; }
+      .body blockquote { margin: 1.8em 0; padding-left: 1.2em; border-left: 3px solid #d8654f; color: #495753; }
+      .body a { color: #236b84; }
+      .body .article-media { clear: both; margin: 42px 0; }
+      .body .article-media--wide { width: min(920px, calc(100vw - 56px)); margin-left: 50%; transform: translateX(-50%); }
+      .body .article-media--left { width: min(48%, 340px); float: left; margin: 12px 28px 22px 0; }
+      .body .article-media--right { width: min(48%, 340px); float: right; margin: 12px 0 22px 28px; }
       [data-cms-editable="text"]:focus, [data-cms-editable="image"]:focus { outline: 3px solid #d8654f; outline-offset: 6px; }
     </style>
   </head>
@@ -2429,11 +2862,13 @@ function draftArticlePreviewDocument(
         <p class="summary" ${region("summary", "Article summary")}>${escapePreviewHtml(summary)}</p>
       </header>
       ${
-        heroSrc
-          ? `<figure><img src="${escapePreviewHtml(heroSrc)}" alt="${escapePreviewHtml(heroAlt)}" ${region("heroImage.src", "Article image", "image")} /></figure>`
-          : ""
+        directiveHero
+          ? renderArticleMediaPreview(directiveHero)
+          : heroSrc
+            ? `<figure><img src="${escapePreviewHtml(heroSrc)}" alt="${escapePreviewHtml(heroAlt)}" ${region("heroImage.src", "Article image", "image")} /></figure>`
+            : ""
       }
-      <div class="body" ${region("bodyMarkdown", "Article body")}>${renderDraftMarkdown(body)}</div>
+      <div class="body" ${region("bodyMarkdown", "Article body")}>${renderArticleMarkdownPreview(body)}</div>
     </article>
   </body>
 </html>`;
@@ -2441,6 +2876,104 @@ function draftArticlePreviewDocument(
 
 function draftString(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function MarkdownTool({
+  children,
+  label,
+  onClick,
+}: {
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label}>
+      {children}
+    </button>
+  );
+}
+
+function formatMarkdownSelection(format: MarkdownFormat, selected: string) {
+  const selection = selected || markdownPlaceholder(format);
+  if (format === "h2" || format === "h3") {
+    const prefix = format === "h2" ? "## " : "### ";
+    const value = selection
+      .split("\n")
+      .map((line) => `${prefix}${line.replace(/^#{1,6}\s+/, "")}`)
+      .join("\n");
+    return { value, selectionStart: prefix.length, selectionEnd: value.length };
+  }
+  if (["bullet", "numbered", "quote"].includes(format)) {
+    const lines = selection.split("\n");
+    const value = lines
+      .map((line, index) => {
+        if (format === "bullet") return `- ${line.replace(/^[-*]\s+/, "")}`;
+        if (format === "numbered") return `${index + 1}. ${line.replace(/^\d+\.\s+/, "")}`;
+        return `> ${line.replace(/^>\s?/, "")}`;
+      })
+      .join("\n");
+    return { value, selectionStart: format === "numbered" ? 3 : 2, selectionEnd: value.length };
+  }
+  const wrappers: Record<
+    Exclude<MarkdownFormat, "bullet" | "h2" | "h3" | "numbered" | "quote">,
+    [string, string]
+  > = {
+    bold: ["**", "**"],
+    italic: ["*", "*"],
+    link: ["[", "](https://)"],
+  };
+  const [before, after] = wrappers[format as keyof typeof wrappers];
+  const value = `${before}${selection}${after}`;
+  return { value, selectionStart: before.length, selectionEnd: before.length + selection.length };
+}
+
+function markdownPlaceholder(format: MarkdownFormat) {
+  if (format === "h2") return "Section heading";
+  if (format === "h3") return "Subheading";
+  if (format === "bullet" || format === "numbered") return "List item";
+  if (format === "quote") return "Quote";
+  if (format === "link") return "link text";
+  return "text";
+}
+
+function createArticleTurndownService() {
+  const service = new TurndownService({
+    bulletListMarker: "-",
+    codeBlockStyle: "fenced",
+    headingStyle: "atx",
+  });
+  service.addRule("articleMedia", {
+    filter: (node) =>
+      node.nodeName === "FIGURE" &&
+      (node as HTMLElement).hasAttribute("data-article-media-directive"),
+    replacement: (_content, node) => {
+      const directive = (node as HTMLElement).getAttribute("data-article-media-directive");
+      return directive ? `\n\n${directive}\n\n` : "";
+    },
+  });
+  return service;
+}
+
+function absoluteCmsAssetUrl(assetPath?: string) {
+  if (!assetPath) return undefined;
+  if (/^https?:\/\//i.test(assetPath)) return assetPath;
+  return new URL(assetPath, "https://cms.usable.dev").toString();
+}
+
+function fragmentWithDirtyValues(
+  fragmentId: string,
+  fragments: Record<string, Record<string, unknown>>,
+  registry: Record<string, CmsRegion>,
+  dirty: Record<string, CmsDirtyValue>,
+) {
+  let content = structuredClone(fragments[fragmentId] || {});
+  for (const [regionId, value] of Object.entries(dirty)) {
+    const region = registry[regionId];
+    if (region?.fragmentId !== fragmentId || !region.path) continue;
+    content = writePath(content, region.path, value);
+  }
+  return content;
 }
 
 function escapePreviewHtml(value: string) {
@@ -2454,19 +2987,6 @@ function escapePreviewHtml(value: string) {
     };
     return entities[character] || character;
   });
-}
-
-function renderDraftMarkdown(markdown: string) {
-  return markdown
-    .trim()
-    .split(/\n\s*\n/)
-    .map((block) => {
-      const value = escapePreviewHtml(block.trim());
-      if (value.startsWith("### ")) return `<h3>${value.slice(4)}</h3>`;
-      if (value.startsWith("## ")) return `<h2>${value.slice(3)}</h2>`;
-      return `<p>${value.replace(/\n/g, "<br />")}</p>`;
-    })
-    .join("");
 }
 
 function saveLabel(status: SaveStatus, unpublished = false) {
