@@ -413,7 +413,23 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
 
   await articleInspector.getByRole("button", { name: "Add image" }).click();
   const imageDialog = page.getByRole("dialog", { name: "Add image" });
-  await imageDialog.getByLabel("Or media URL").fill("/images/olavur-ellefsen.png");
+  await imageDialog.locator('input[type="file"]').setInputFiles({
+    name: "IMG_3284.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
+  const imagePreview = imageDialog.getByRole("img", { name: "Selected image preview" });
+  await expect(imagePreview).toHaveAttribute("src", /^blob:/);
+  await expect(
+    imageDialog.getByRole("figure").getByText("IMG_3284.png", { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("cms-image-upload-preview.png"),
+    fullPage: true,
+  });
   await imageDialog.getByLabel("Alternative text").fill("A Faroese lake below the mountains");
   await imageDialog.getByLabel("Caption").fill("The lake list begins here.");
   await imageDialog.getByLabel("Placement").selectOption("hero");

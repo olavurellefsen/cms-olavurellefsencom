@@ -7,6 +7,7 @@ import {
   Heading2,
   Heading3,
   History,
+  ImageOff,
   ImagePlus,
   ImageUp,
   Italic,
@@ -255,6 +256,8 @@ export function CmsEditor() {
   const [chatSending, setChatSending] = useState(false);
   const [mediaComposer, setMediaComposer] = useState<MediaComposer | null>(null);
   const [mediaSaving, setMediaSaving] = useState(false);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState("");
+  const [failedMediaPreviewUrl, setFailedMediaPreviewUrl] = useState("");
   const [chatLog, setChatLog] = useState<ChatEntry[]>([
     {
       id: "welcome",
@@ -282,6 +285,23 @@ export function CmsEditor() {
   dirtyRef.current = dirty;
   fragmentsRef.current = fragments;
   registryRef.current = registry;
+
+  useEffect(() => {
+    const file = mediaComposer?.type === "image" ? mediaComposer.file : undefined;
+    if (!file) {
+      setMediaPreviewUrl("");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setMediaPreviewUrl(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [mediaComposer?.file, mediaComposer?.type]);
+
+  const mediaImagePreviewSrc =
+    mediaComposer?.type === "image"
+      ? mediaPreviewUrl || previewableImageSource(mediaComposer.src)
+      : "";
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -2019,6 +2039,33 @@ export function CmsEditor() {
                   }}
                 />
               </label>
+              {mediaImagePreviewSrc ? (
+                <figure className="cms-media-preview">
+                  <div className="cms-media-preview__canvas">
+                    {failedMediaPreviewUrl === mediaImagePreviewSrc ? (
+                      <output className="cms-media-preview__error">
+                        <ImageOff size={24} aria-hidden="true" />
+                        <span>
+                          Preview unavailable. Check the image URL or choose another file.
+                        </span>
+                      </output>
+                    ) : (
+                      // biome-ignore lint/performance/noImgElement: Blob and arbitrary author-provided URLs need a browser-native preview before upload.
+                      <img
+                        src={mediaImagePreviewSrc}
+                        alt={mediaComposer.alt.trim() || "Selected image preview"}
+                        onError={() => setFailedMediaPreviewUrl(mediaImagePreviewSrc)}
+                      />
+                    )}
+                  </div>
+                  <figcaption>
+                    <strong>Preview</strong>
+                    <span>
+                      {mediaComposer.file?.name || mediaComposer.caption.trim() || "Current image"}
+                    </span>
+                  </figcaption>
+                </figure>
+              ) : null}
               <label>
                 <span>Or media URL</span>
                 <input
@@ -2798,6 +2845,21 @@ function isCmsAuthenticationError(error: unknown): boolean {
   }
 
   return /(?:^|\D)401(?:\D|$)/.test(messageFrom(error));
+}
+
+function previewableImageSource(value: string): string {
+  const source = value.trim();
+  if (!source) return "";
+  if (source.startsWith("/") || source.startsWith("blob:") || source.startsWith("data:image/")) {
+    return source;
+  }
+
+  try {
+    const url = new URL(source);
+    return url.protocol === "http:" || url.protocol === "https:" ? source : "";
+  } catch {
+    return "";
+  }
 }
 
 function mergeChanges(changes: CmsChange[], required: CmsChange[]) {
