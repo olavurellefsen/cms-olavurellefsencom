@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { cmsRegion } from "@/lib/cms/regions";
+import { type CmsSearchParams, isCmsContentRequest } from "@/lib/cms/request";
 import { getGlobalContent, getPageContent } from "@/lib/content/load";
 
 export const metadata: Metadata = {
@@ -9,8 +10,16 @@ export const metadata: Metadata = {
   alternates: { canonical: "/about" },
 };
 
-export default async function AboutPage() {
-  const [global, loadedPage] = await Promise.all([getGlobalContent(), getPageContent("about")]);
+export default async function AboutPage({
+  searchParams,
+}: {
+  searchParams: Promise<CmsSearchParams>;
+}) {
+  const noStore = isCmsContentRequest(await searchParams);
+  const [global, loadedPage] = await Promise.all([
+    getGlobalContent({ noStore }),
+    getPageContent("about", { noStore }),
+  ]);
   if (!loadedPage || loadedPage.value.content.type !== "about") return null;
   const content = loadedPage.value.content;
 

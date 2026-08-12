@@ -2,13 +2,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArticleList } from "@/components/article-list";
 import { cmsRegion } from "@/lib/cms/regions";
+import { type CmsSearchParams, isCmsContentRequest } from "@/lib/cms/request";
 import { getGlobalContent, getPageContent, getPublishedArticles } from "@/lib/content/load";
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<CmsSearchParams>;
+}) {
+  const noStore = isCmsContentRequest(await searchParams);
   const [global, loadedPage, articles] = await Promise.all([
-    getGlobalContent(),
-    getPageContent("home"),
-    getPublishedArticles(),
+    getGlobalContent({ noStore }),
+    getPageContent("home", { noStore }),
+    getPublishedArticles({ noStore }),
   ]);
   if (!loadedPage || loadedPage.value.content.type !== "home") return null;
   const content = loadedPage.value.content;

@@ -28,6 +28,10 @@ export type LoadedValue<T> = {
   fragmentId?: string;
 };
 
+export type ContentLoadOptions = {
+  noStore?: boolean;
+};
+
 function stripFrontmatter(value: string) {
   if (!value.trimStart().startsWith("---")) return value;
   const match = value.match(/^---[\s\S]*?\n---\s*\n?/);
@@ -44,7 +48,7 @@ function usableHeaders(token: string) {
   return { Accept: "application/json", Authorization: `Bearer ${token}` };
 }
 
-async function fetchFragment(fragmentId: string) {
+async function fetchFragment(fragmentId: string, noStore = false) {
   const token = process.env.USABLE_CMS_SERVER_TOKEN;
   const source = process.env.CMS_CONTENT_SOURCE ?? "usable";
   if (!token || !fragmentId || source === "fallback") return null;
@@ -53,7 +57,9 @@ async function fetchFragment(fragmentId: string) {
     const baseUrl = (process.env.USABLE_API_BASE_URL || "https://usable.dev").replace(/\/$/, "");
     const response = await fetch(`${baseUrl}/api/memory-fragments/${fragmentId}`, {
       headers: usableHeaders(token),
-      next: { revalidate: 60, tags: [`usable-fragment-${fragmentId}`] },
+      ...(noStore
+        ? { cache: "no-store" as const }
+        : { next: { revalidate: 60, tags: [`usable-fragment-${fragmentId}`] } }),
     });
     if (!response.ok) return null;
     const payload = (await response.json()) as FragmentResponse;
@@ -162,7 +168,7 @@ async function fetchWorkspacePageReferences(noStore = false): Promise<CmsPageRef
       try {
         const rawContent = fragment.content
           ? parseFragmentContent(fragment.content)
-          : await fetchFragment(fragmentId);
+          : await fetchFragment(fragmentId, noStore);
         const content = articleContentSchema.safeParse(rawContent);
         if (content.success) {
           path = `/writing/${content.data.slug}`;
@@ -230,21 +236,38 @@ export async function getCmsEditorPageDirectory(): Promise<CmsPageReference[]> {
   return loadCmsPageDirectory(true);
 }
 
-export const getGlobalContent = cache(async (): Promise<LoadedValue<GlobalContent>> => {
+async function loadGlobalContent(noStore = false): Promise<LoadedValue<GlobalContent>> {
   const fragmentId =
     process.env.USABLE_CMS_GLOBAL_CONFIG_FRAGMENT_ID || siteBinding.globalFragmentId;
-  const live = await fetchFragment(fragmentId);
+  const live = await fetchFragment(fragmentId, noStore);
   const parsed = globalContentSchema.safeParse(live);
   if (parsed.success) return { value: parsed.data, source: "usable", fragmentId };
   return { value: fallbackSite.global, source: "fallback", fragmentId: fragmentId || undefined };
-});
+}
 
-export const getPageContent = cache(async (pageId: string): Promise<LoadedValue<Page> | null> => {
+const getCachedGlobalContent = cache(() => loadGlobalContent(false));
+
+export function getGlobalContent(
+  options: ContentLoadOptions = {},
+): Promise<LoadedValue<GlobalContent>> {
+  return options.noStore ? loadGlobalContent(true) : getCachedGlobalContent();
+}
+
+async function loadPageContent(
+  pageId: string,
+  noStore = false,
+  knownReference?: CmsPageReference,
+): Promise<LoadedValue<Page> | null> {
   const fallback = fallbackPage(pageId);
-  const reference = (await getCmsPageDirectory()).find((page) => page.id === pageId);
+  const reference =
+    knownReference ||
+    (noStore
+      ? (await loadCmsPageDirectory(true)).filter(isPublishedCmsPage)
+      : await getCmsPageDirectory()
+    ).find((page) => page.id === pageId);
   if (!reference && !fallback) return null;
   const fragmentId = reference?.fragmentId || siteBinding.pageFragmentIds[pageId];
-  const live = await fetchFragment(fragmentId);
+  const live = await fetchFragment(fragmentId, noStore);
   const content = pageContentSchema.safeParse(live);
   if (content.success) {
     return {
@@ -264,13 +287,29 @@ export const getPageContent = cache(async (pageId: string): Promise<LoadedValue<
   return fallback
     ? { value: fallback, source: "fallback", fragmentId: fragmentId || undefined }
     : null;
-});
+}
 
-export const getPublishedArticles = cache(async () => {
-  const references = (await getCmsPageDirectory()).filter(
+const getCachedPageContent = cache((pageId: string) => loadPageContent(pageId, false));
+
+export function getPageContent(
+  pageId: string,
+  options: ContentLoadOptions = {},
+): Promise<LoadedValue<Page> | null> {
+  return options.noStore ? loadPageContent(pageId, true) : getCachedPageContent(pageId);
+}
+
+async function loadPublishedArticles(noStore = false) {
+  const directory = noStore
+    ? (await loadCmsPageDirectory(true)).filter(isPublishedCmsPage)
+    : await getCmsPageDirectory();
+  const references = directory.filter(
     (page) => page.id.startsWith("article-") || page.path.startsWith("/writing/"),
   );
-  const loaded = await Promise.all(references.map((page) => getPageContent(page.id)));
+  const loaded = await Promise.all(
+    references.map((page) =>
+      noStore ? loadPageContent(page.id, true, page) : getPageContent(page.id),
+    ),
+  );
   return loaded
     .filter((page): page is LoadedValue<Page> => Boolean(page))
     .filter((page) => {
@@ -282,10 +321,16 @@ export const getPublishedArticles = cache(async () => {
       const bDate = b.value.content.type === "article" ? b.value.content.publishedAt : "";
       return bDate.localeCompare(aDate);
     });
-});
+}
 
-export async function getArticleBySlug(slug: string) {
-  const articles = await getPublishedArticles();
+const getCachedPublishedArticles = cache(() => loadPublishedArticles(false));
+
+export function getPublishedArticles(options: ContentLoadOptions = {}) {
+  return options.noStore ? loadPublishedArticles(true) : getCachedPublishedArticles();
+}
+
+export async function getArticleBySlug(slug: string, options: ContentLoadOptions = {}) {
+  const articles = await getPublishedArticles(options);
   return articles.find(
     (page) => page.value.content.type === "article" && page.value.content.slug === slug,
   );
