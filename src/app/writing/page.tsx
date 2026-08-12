@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ArticleList } from "@/components/article-list";
 import { cmsRegion } from "@/lib/cms/regions";
+import { type CmsSearchParams, isCmsContentRequest } from "@/lib/cms/request";
 import { getPageContent, getPublishedArticles } from "@/lib/content/load";
 
 export const metadata: Metadata = {
@@ -10,10 +11,15 @@ export const metadata: Metadata = {
   alternates: { canonical: "/writing" },
 };
 
-export default async function WritingPage() {
+export default async function WritingPage({
+  searchParams,
+}: {
+  searchParams: Promise<CmsSearchParams>;
+}) {
+  const noStore = isCmsContentRequest(await searchParams);
   const [loadedPage, articles] = await Promise.all([
-    getPageContent("writing"),
-    getPublishedArticles(),
+    getPageContent("writing", { noStore }),
+    getPublishedArticles({ noStore }),
   ]);
   if (!loadedPage || loadedPage.value.content.type !== "writing") return null;
   const content = loadedPage.value.content;

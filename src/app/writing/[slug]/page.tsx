@@ -5,11 +5,15 @@ import { notFound } from "next/navigation";
 import { ArticleDirectiveHero, ArticleMarkdown } from "@/components/article-markdown";
 import { articleRegionId } from "@/lib/cms/article-regions";
 import { cmsRegion } from "@/lib/cms/regions";
+import { type CmsSearchParams, isCmsContentRequest } from "@/lib/cms/request";
 import { firstArticleHeroMedia } from "@/lib/content/article-media";
 import { getArticleBySlug, getGlobalContent, getPublishedArticles } from "@/lib/content/load";
 import { safeJsonLd } from "@/lib/seo/json-ld";
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<CmsSearchParams>;
+};
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -27,9 +31,9 @@ export async function generateStaticParams() {
   );
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
-  const loaded = await getArticleBySlug(slug);
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const loaded = await getArticleBySlug(slug, { noStore: isCmsContentRequest(query) });
   if (!loaded || loaded.value.content.type !== "article") return {};
   const article = loaded.value.content;
   const directiveHero = firstArticleHeroMedia(article.bodyMarkdown);
@@ -51,9 +55,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ArticlePage({ params }: Props) {
-  const { slug } = await params;
-  const [loaded, global] = await Promise.all([getArticleBySlug(slug), getGlobalContent()]);
+export default async function ArticlePage({ params, searchParams }: Props) {
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const noStore = isCmsContentRequest(query);
+  const [loaded, global] = await Promise.all([
+    getArticleBySlug(slug, { noStore }),
+    getGlobalContent({ noStore }),
+  ]);
   if (!loaded || loaded.value.content.type !== "article") notFound();
   const article = loaded.value.content;
   const directiveHero = firstArticleHeroMedia(article.bodyMarkdown);
