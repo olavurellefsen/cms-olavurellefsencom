@@ -61,11 +61,18 @@ async function fetchFragment(fragmentId: string, noStore = false) {
         ? { cache: "no-store" as const }
         : { next: { revalidate: 60, tags: [`usable-fragment-${fragmentId}`] } }),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn("CMS fragment read failed", { fragmentId, status: response.status });
+      return null;
+    }
     const payload = (await response.json()) as FragmentResponse;
     const rawContent = payload.fragment?.content ?? payload.content;
     return typeof rawContent === "string" ? parseFragmentContent(rawContent) : null;
-  } catch {
+  } catch (error) {
+    console.warn("CMS fragment read failed", {
+      fragmentId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
     return null;
   }
 }
@@ -213,8 +220,16 @@ async function loadCmsPageDirectory(noStore = false): Promise<CmsPageReference[]
     fetchWorkspacePageReferences(noStore),
   ]);
   const pages = new Map(fallbackReferences.map((page) => [page.id, page]));
-  for (const page of [...workspacePages, ...cmsPages]) {
-    pages.set(page.id, { ...pages.get(page.id), ...page });
+  for (const page of workspacePages) {
+    if (!pages.has(page.id)) pages.set(page.id, page);
+  }
+  for (const page of cmsPages) {
+    const existing = pages.get(page.id);
+    pages.set(page.id, {
+      ...existing,
+      ...page,
+      fragmentId: siteBinding.pageFragmentIds[page.id] || page.fragmentId || existing?.fragmentId,
+    });
   }
   return [...pages.values()]
     .filter((page) => page.status !== "archived" && page.status !== "hidden")
@@ -283,6 +298,13 @@ async function loadPageContent(
       source: "usable",
       fragmentId,
     };
+  }
+  if (live !== null) {
+    console.warn("CMS page content validation failed", {
+      pageId,
+      fragmentId,
+      issues: content.error?.issues.map((issue) => ({ code: issue.code, path: issue.path })),
+    });
   }
   return fallback
     ? { value: fallback, source: "fallback", fragmentId: fragmentId || undefined }
