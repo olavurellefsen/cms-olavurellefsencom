@@ -232,6 +232,52 @@
     },
 
     {
+      "id": "article-ai-strategy-needs-a-living-memory.article.title",
+      "label": "Article title",
+      "kind": "text",
+      "path": "title",
+      "scope": "page",
+      "pageId": "article-ai-strategy-needs-a-living-memory",
+      "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
+    },
+    {
+      "id": "article-ai-strategy-needs-a-living-memory.article.summary",
+      "label": "Article summary",
+      "kind": "text",
+      "path": "summary",
+      "scope": "page",
+      "pageId": "article-ai-strategy-needs-a-living-memory",
+      "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
+    },
+    {
+      "id": "article-ai-strategy-needs-a-living-memory.article.bodyMarkdown",
+      "label": "Article body",
+      "kind": "text",
+      "path": "bodyMarkdown",
+      "scope": "page",
+      "pageId": "article-ai-strategy-needs-a-living-memory",
+      "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
+    },
+    {
+      "id": "article-ai-strategy-needs-a-living-memory.article.heroImage.src",
+      "label": "Article image",
+      "kind": "image",
+      "path": "heroImage.src",
+      "scope": "page",
+      "pageId": "article-ai-strategy-needs-a-living-memory",
+      "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
+    },
+    {
+      "id": "article-ai-strategy-needs-a-living-memory.article.heroImage.alt",
+      "label": "Article image alt text",
+      "kind": "text",
+      "path": "heroImage.alt",
+      "scope": "page",
+      "pageId": "article-ai-strategy-needs-a-living-memory",
+      "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
+    },
+
+    {
       "id": "article-why-writing-here.article.title",
       "label": "Article title",
       "kind": "text",
@@ -328,6 +374,17 @@
         { "id": "href", "label": "Link", "kind": "link", "path": "href" },
         { "id": "accent", "label": "Accent", "kind": "text", "path": "accent" }
       ]
+    },
+    {
+      "id": "article-ai-strategy-needs-a-living-memory.article.topics",
+      "label": "Article topics",
+      "path": "topics",
+      "scope": "page",
+      "pageId": "article-ai-strategy-needs-a-living-memory",
+      "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161",
+      "itemIdentity": "index",
+      "allowedOperations": ["create", "update", "delete"],
+      "fields": [{ "id": "value", "label": "Topic", "kind": "text", "path": "$value" }]
     },
     {
       "id": "article-why-writing-here.article.topics",
