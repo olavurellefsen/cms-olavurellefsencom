@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-03T10:24:00Z",
+  "generated": "2026-08-13T10:20:00Z",
   "sections": [
     {
       "id": "mockups",
@@ -9,7 +9,7 @@
           "slug": "current-work-inline-controls",
           "files": [
             {
-              "label": "Inline collection controls",
+              "label": "Current work controls",
               "path": "mockups/current-work-inline-controls/index.html"
             }
           ]

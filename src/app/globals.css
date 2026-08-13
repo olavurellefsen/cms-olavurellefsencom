@@ -2001,6 +2001,48 @@ html.cms-editing body > .site-footer {
   background: #fff;
 }
 
+.cms-collection-list li.cms-work-list-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.cms-work-list-actions {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 38px);
+  gap: 4px;
+  border: 0;
+}
+
+.cms-work-list-actions button {
+  width: 38px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d3dcd8;
+  border-radius: 4px;
+  background: #fff;
+  color: #31534b;
+  cursor: pointer;
+}
+
+.cms-work-list-actions button:hover,
+.cms-work-list-actions button:focus-visible {
+  border-color: #ff7d61;
+  background: #fff6f3;
+}
+
+.cms-work-list-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.32;
+}
+
+.cms-work-list-actions .cms-work-list-actions__remove {
+  color: #9f3f35;
+}
+
 .cms-collection-list li > span,
 .cms-collection-open span {
   min-width: 0;
@@ -2052,6 +2094,17 @@ html.cms-editing body > .site-footer {
   color: #71807b;
   font-size: 10px;
   line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .cms-work-list-actions {
+    grid-template-columns: repeat(3, 44px);
+  }
+
+  .cms-work-list-actions button {
+    width: 44px;
+    min-height: 44px;
+  }
 }
 
 .cms-page-list button,
