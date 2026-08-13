@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  ArrowDown,
+  ArrowUp,
   Bold,
   Check,
   ExternalLink,
@@ -1327,7 +1329,6 @@ export function CmsEditor() {
     items.splice(Math.min(index, items.length), 0, item);
     clearWorkRemovalUndo();
     updateCurrentWork(items, `Restored ${item.name}`);
-    window.setTimeout(() => focusCurrentWorkItem(Math.min(index, items.length - 1)), 80);
   }
 
   function clearWorkRemovalUndo() {
@@ -1336,7 +1337,7 @@ export function CmsEditor() {
     setWorkRemovalUndo(null);
   }
 
-  function moveWorkItem(index: number, direction: -1 | 1) {
+  function moveWorkItem(index: number, direction: -1 | 1, focusPreview = true) {
     const items = currentWorkItemsFromRefs();
     const targetIndex = index + direction;
     if (!items[index] || !items[targetIndex]) return;
@@ -1344,7 +1345,7 @@ export function CmsEditor() {
     [items[index], items[targetIndex]] = [items[targetIndex], items[index]];
     setSelectedRegionId(undefined);
     updateCurrentWork(items, `Moved ${items[targetIndex].name} ${direction < 0 ? "up" : "down"}`);
-    window.setTimeout(() => focusCurrentWorkItem(targetIndex), 80);
+    if (focusPreview) window.setTimeout(() => focusCurrentWorkItem(targetIndex), 80);
   }
 
   function focusCurrentWorkItem(index: number) {
@@ -1720,21 +1721,45 @@ export function CmsEditor() {
                       <Plus size={15} /> Add
                     </button>
                   </header>
-                  <ol className="cms-collection-list">
+                  <ol className="cms-collection-list cms-work-collection-list">
                     {workItems.map((item, index) => (
-                      <li key={`${item.name}-${index}`}>
+                      <li className="cms-work-list-item" key={workItemRenderKey(workItems, index)}>
                         <span>
                           <strong>{item.name}</strong>
                           <small>{item.role}</small>
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => removeWorkItem(index)}
-                          aria-label={`Remove ${item.name} from Current work`}
-                          title="Remove from Current work"
+                        <fieldset
+                          className="cms-work-list-actions"
+                          aria-label={`${item.name} order and removal controls`}
                         >
-                          <Trash2 size={15} />
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => moveWorkItem(index, -1, false)}
+                            disabled={index === 0}
+                            aria-label={`Move ${item.name} up`}
+                            title="Move up"
+                          >
+                            <ArrowUp size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveWorkItem(index, 1, false)}
+                            disabled={index === workItems.length - 1}
+                            aria-label={`Move ${item.name} down`}
+                            title="Move down"
+                          >
+                            <ArrowDown size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="cms-work-list-actions__remove"
+                            onClick={() => removeWorkItem(index)}
+                            aria-label={`Remove ${item.name} from Current work`}
+                            title="Remove from Current work"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </fieldset>
                       </li>
                     ))}
                   </ol>
@@ -2788,6 +2813,24 @@ function normalizeWorkItems(value: unknown): WorkItem[] {
       },
     ];
   });
+}
+
+function workItemRenderKey(items: WorkItem[], index: number): string {
+  const item = items[index];
+  const identity = [item.accent, item.name, item.role, item.description, item.href].join("\u001f");
+  const occurrence = items
+    .slice(0, index)
+    .filter(
+      (candidate) =>
+        [
+          candidate.accent,
+          candidate.name,
+          candidate.role,
+          candidate.description,
+          candidate.href,
+        ].join("\u001f") === identity,
+    ).length;
+  return `${identity}\u001f${occurrence}`;
 }
 
 function workItemLocation(regionId: string, path?: string) {

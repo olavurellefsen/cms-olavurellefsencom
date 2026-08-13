@@ -123,6 +123,7 @@ test("CMS offers a fresh login when content access expires during startup", asyn
 test("CMS edits the real page inline and preserves broker workflows", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(60_000);
   const sharp = createRequire(import.meta.url)("sharp");
   const oversizedImage = await sharp({
     create: {
@@ -209,6 +210,13 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await page.goto("http://localhost:3000/?cms=1");
   await expect(page.getByRole("main", { name: "Usable CMS inline editor" })).toBeVisible();
   const preview = page.frameLocator('iframe[title="Home inline editor"]');
+  const contentPanel = page.getByRole("complementary", { name: "content panel" });
+  async function openContentPanel() {
+    if (!(await contentPanel.isVisible())) {
+      await page.getByRole("button", { name: "Content" }).click();
+    }
+    await expect(contentPanel).toBeVisible();
+  }
   const headline = preview.getByRole("textbox", { name: "Edit Home headline" });
   await expect(headline).toHaveAttribute("contenteditable", "true");
   await expect(headline).toHaveText("Ólavur Ellefsen");
@@ -268,6 +276,7 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   const workInspector = page.getByRole("complementary", { name: "Selected element settings" });
   await expect(workInspector.getByLabel("Work URL")).toHaveValue("https://example.com/");
   await workInspector.getByLabel("Work URL").fill("https://example.org/long-horizon");
+  await workInspector.getByRole("button", { name: "Close inspector" }).click();
   await preview.getByRole("button", { name: "Move Example Project up" }).click();
   await expect(preview.getByRole("textbox", { name: "Edit Work 4 name" })).toHaveText(
     "Example Project",
@@ -285,7 +294,24 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
     "Example Project",
   );
 
-  await preview.getByRole("button", { name: "Remove Usable from Current work" }).click();
+  await openContentPanel();
+  const currentWorkManager = page.getByRole("region", { name: "Current work" });
+  await expect(
+    currentWorkManager.getByRole("group", {
+      name: "Example Project order and removal controls",
+    }),
+  ).toBeVisible();
+  await expect(currentWorkManager.getByRole("button", { name: "Move Usable up" })).toBeDisabled();
+  await currentWorkManager.getByRole("button", { name: "Move Example Project down" }).click();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText(
+    "Example Project",
+  );
+  await currentWorkManager.getByRole("button", { name: "Move Example Project up" }).click();
+  await expect(preview.getByRole("textbox", { name: "Edit Work 4 name" })).toHaveText(
+    "Example Project",
+  );
+
+  await currentWorkManager.getByRole("button", { name: "Remove Usable from Current work" }).click();
   await expect(
     preview.locator(".work-list").getByText("Usable", { exact: true }),
   ).not.toBeVisible();
@@ -293,7 +319,8 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await expect(removalToast).toContainText("Removed Usable from draft");
   await removalToast.getByRole("button", { name: "Undo" }).click();
   await expect(preview.locator(".work-list").getByText("Usable", { exact: true })).toBeVisible();
-  await preview.getByRole("button", { name: "Remove Usable from Current work" }).click();
+  await openContentPanel();
+  await currentWorkManager.getByRole("button", { name: "Remove Usable from Current work" }).click();
   await expect(
     preview.locator(".work-list").getByText("Usable", { exact: true }),
   ).not.toBeVisible();
@@ -330,7 +357,7 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
       }),
     )
     .toBe(true);
-  await page.getByRole("button", { name: "Content" }).click();
+  await openContentPanel();
   const writingManager = page.getByRole("region", { name: "Writing" });
   await expect(writingManager.getByRole("button", { name: "Add" })).toBeVisible();
   await expect(
