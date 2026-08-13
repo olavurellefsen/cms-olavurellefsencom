@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getArticleBySlug, isPublishedCmsPage, pageIdFromTags, parseFragmentContent } from "./load";
+import { fallbackPage } from "./fallback";
+import {
+  getArticleBySlug,
+  getPageContent,
+  isPublishedCmsPage,
+  pageIdFromTags,
+  parseFragmentContent,
+} from "./load";
 import { articleContentSchema } from "./schema";
 
 afterEach(() => {
@@ -93,5 +100,66 @@ describe("CMS page visibility", () => {
     expect(loaded?.value.content).toMatchObject(article);
     expect(fetchMock).toHaveBeenCalled();
     expect(fetchMock.mock.calls.every(([, init]) => init?.cache === "no-store")).toBe(true);
+  });
+
+  it("keeps checked-in page fragment bindings authoritative over stale workspace duplicates", async () => {
+    const canonicalFragmentId = "489909b4-df12-4aed-bb7a-090486b37071";
+    const staleFragmentId = "599df734-f88a-409d-bde8-7701f9568a74";
+    const fallback = fallbackPage("home");
+    if (!fallback || fallback.content.type !== "home") throw new Error("Home fallback is required");
+    const canonicalContent = {
+      ...fallback.content,
+      selectedWork: [
+        ...fallback.content.selectedWork,
+        {
+          accent: "coral" as const,
+          description: "The National Gallery is the Faroe Islands' main museum for Faroese art.",
+          href: "https://art.fo",
+          name: "National Gallery of the Faroe Islands",
+          role: "Chairman of the Board",
+        },
+      ],
+    };
+
+    vi.stubEnv("USABLE_CMS_SERVER_TOKEN", "test-server-token");
+    vi.stubEnv("USABLE_CMS_WORKSPACE_ID", "test-workspace");
+    vi.stubEnv("NEXT_PUBLIC_USABLE_CMS_SITE_ID", "test-site");
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/api/sites/test-site/pages")) {
+        return new Response('{"error":"Invalid Compact JWS"}', { status: 500 });
+      }
+      if (url.includes("/api/memory-fragments?")) {
+        return Response.json({
+          fragments: [
+            {
+              id: staleFragmentId,
+              title: "Stale Home",
+              tags: ["usable-cms-page", "ucms:page:home"],
+              content: JSON.stringify(fallback.content),
+            },
+          ],
+        });
+      }
+      if (url.endsWith(`/api/memory-fragments/${canonicalFragmentId}`)) {
+        return Response.json({
+          fragment: { id: canonicalFragmentId, content: JSON.stringify(canonicalContent) },
+        });
+      }
+      if (url.endsWith(`/api/memory-fragments/${staleFragmentId}`)) {
+        return Response.json({
+          fragment: { id: staleFragmentId, content: JSON.stringify(fallback.content) },
+        });
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const loaded = await getPageContent("home", { noStore: true });
+
+    expect(loaded?.fragmentId).toBe(canonicalFragmentId);
+    expect(loaded?.value.content.type === "home" && loaded.value.content.selectedWork).toHaveLength(
+      5,
+    );
   });
 });
