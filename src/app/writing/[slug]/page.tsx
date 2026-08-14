@@ -130,6 +130,7 @@ export default async function ArticlePage({ params, searchParams }: Props) {
               width={2160}
               height={2700}
               priority
+              unoptimized
               {...cmsRegion({
                 fragmentId: loaded.fragmentId,
                 id: articleRegionId(loaded.value.id, "heroImage.src"),
