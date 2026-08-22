@@ -178,6 +178,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     _working: { state: true },
     _workflow: { state: true },
     _bridgeSession: { state: true },
+    _bridgeError: { state: true },
     _error: { state: true },
     _imageUpload: { state: true },
     _uploadingPath: { state: true },
@@ -211,6 +212,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     this._working = undefined;
     this._workflow = "loading";
     this._bridgeSession = undefined;
+    this._bridgeError = "";
     this._error = "";
     this._imageUpload = undefined;
     this._uploadingPath = undefined;
@@ -340,6 +342,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
           @load=${this.#bridgeLoaded}
         ></iframe>
 
+        ${this._bridgeError ? html`<div class="callout error">${this._bridgeError}</div>` : nothing}
         ${this._error ? html`<div class="callout error">${this._error}</div>` : nothing}
         ${validationErrors.length
           ? html`<div class="callout warning">${validationErrors.join(" ")}</div>`
@@ -426,6 +429,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
           src=${bridgeUrl()}
           @load=${this.#bridgeLoaded}
         ></iframe>
+        ${this._bridgeError ? html`<div class="callout error">${this._bridgeError}</div>` : nothing}
         ${this._error ? html`<div class="callout error">${this._error}</div>` : nothing}
         ${validationErrors.length
           ? html`<div class="callout warning">${validationErrors.join(" ")}</div>`
@@ -1700,15 +1704,17 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
       const payload = await response.json().catch(() => ({}));
       if (response.ok && typeof payload.sessionToken === "string") {
         await this.#bridgeRequest("adopt-session", { sessionToken: payload.sessionToken });
+        this._bridgeError = "";
         return;
       }
 
       if (response.status >= 500) {
-        this._error = payload.message || "Usable identity is temporarily unavailable.";
+        this._bridgeError = payload.message || "Usable identity is temporarily unavailable.";
       }
       await this.#bridgeRequest("session", {});
+      this._bridgeError = "";
     } catch (error) {
-      this._error = errorMessage(error);
+      this._bridgeError = errorMessage(error);
       await this.#bridgeRequest("session", {}).catch(() => undefined);
     } finally {
       this.#federating = false;
@@ -1772,6 +1778,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     if (event.source !== frame?.contentWindow) return;
     if (event.data?.type === `${BRIDGE_MESSAGE}:status`) {
       this._bridgeSession = event.data.session;
+      if (event.data.session?.authorized) this._bridgeError = "";
       if (event.data.session?.signedIn === false) void this.#bootstrapBridgeSession();
       return;
     }
@@ -1780,7 +1787,10 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     if (!pending) return;
     this.#pending.delete(event.data.requestId);
     if (event.data.ok) {
-      if (event.data.result?.signedIn !== undefined) this._bridgeSession = event.data.result;
+      if (event.data.result?.signedIn !== undefined) {
+        this._bridgeSession = event.data.result;
+        if (event.data.result?.authorized) this._bridgeError = "";
+      }
       pending.resolve(event.data.result);
     } else {
       pending.reject(new Error(event.data.error || "The Usable CMS request failed."));

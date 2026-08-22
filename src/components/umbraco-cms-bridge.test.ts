@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -6,6 +6,7 @@ import {
   openUsableLoginPopup,
   performBridgeOperation,
   UmbracoCmsBridge,
+  waitForCmsBroker,
 } from "./umbraco-cms-bridge";
 
 afterEach(() => {
@@ -29,6 +30,63 @@ function broker(overrides: Partial<CmsBroker> = {}): CmsBroker {
 }
 
 describe("Umbraco CMS bridge", () => {
+  it("waits for the broker during its supported startup window", async () => {
+    const cmsBroker = broker();
+    let discovered: CmsBroker | undefined;
+    const wait = vi.fn(async () => {
+      discovered = cmsBroker;
+    });
+
+    await expect(waitForCmsBroker(() => discovered, wait, 2)).resolves.toBe(cmsBroker);
+    expect(wait).toHaveBeenCalledWith(100);
+  });
+
+  it("queues an early adoption request and announces the adopted session", async () => {
+    const adopted = {
+      signedIn: true,
+      authorized: true,
+      user: { name: "Ólavur" },
+      capabilities: { edit: true, publish: true, upload: true },
+    };
+    const cmsBroker = broker({
+      adoptSession: vi.fn(async () => adopted),
+      session: vi.fn(async () => ({ signedIn: false, authorized: false })),
+    });
+    const postMessage = vi.spyOn(window, "postMessage").mockImplementation(() => undefined);
+
+    render(
+      createElement(UmbracoCmsBridge, {
+        parentOrigin: "https://olavurellefsen-umbraco.fly.dev",
+      }),
+    );
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: "https://olavurellefsen-umbraco.fly.dev",
+        source: window,
+        data: {
+          type: "olavur-usable-bridge:request",
+          requestId: "early-adoption",
+          operation: "adopt-session",
+          payload: { sessionToken: "bs1.federated" },
+        },
+      }),
+    );
+    (window as unknown as { usableCmsBroker?: CmsBroker }).usableCmsBroker = cmsBroker;
+
+    expect(await screen.findByText("Connected as Ólavur")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "olavur-usable-bridge:response",
+          requestId: "early-adoption",
+          ok: true,
+          result: adopted,
+        }),
+        { targetOrigin: "https://olavurellefsen-umbraco.fly.dev" },
+      ),
+    );
+  });
+
   it("adopts an Umbraco-federated session without opening a second login", async () => {
     const adoptSession = vi.fn(async () => ({ signedIn: true, authorized: true }));
 
