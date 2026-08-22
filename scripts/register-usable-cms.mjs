@@ -4,6 +4,7 @@ import { chmod, readFile, writeFile } from "node:fs/promises";
 const setupUrl = process.env.USABLE_CMS_SETUP_URL || "https://cms.usable.dev/api/setup/register";
 const setupToken = process.env.USABLE_CMS_SETUP_TOKEN;
 const existingServerToken = await readExistingServerToken();
+const existingBinding = await readExistingBinding();
 
 if (!setupToken) {
   console.error("USABLE_CMS_SETUP_TOKEN is required. Complete the Usable CMS device login first.");
@@ -68,7 +69,11 @@ const siteId = result.site?.id || result.siteId || "";
 const integrationKey =
   result.embedKey?.token ||
   result.integrationKey ||
+  result.binding?.integrationKey ||
+  result.publicIntegration?.integrationKey ||
+  result.publicIntegration?.embedKey ||
   result.publicEnv?.NEXT_PUBLIC_USABLE_CMS_INTEGRATION_KEY ||
+  existingBinding.integrationKey ||
   "";
 const globalFragmentId =
   result.contentFragments?.global?.fragmentId || result.globalFragmentId || "";
@@ -101,9 +106,38 @@ if (!workspaceId || !siteId || !integrationKey || !globalFragmentId || !pageEntr
   process.exit(1);
 }
 
+const sameExistingSite =
+  existingBinding.siteId === siteId && existingBinding.workspaceId === workspaceId;
+const resolvedGlobalFragmentId =
+  (sameExistingSite && existingBinding.globalFragmentId) || globalFragmentId;
+const resolvedPageFragmentIds = sameExistingSite
+  ? { ...pageFragmentIds, ...existingBinding.pageFragmentIds }
+  : pageFragmentIds;
+if (
+  sameExistingSite &&
+  (resolvedGlobalFragmentId !== globalFragmentId ||
+    Object.entries(existingBinding.pageFragmentIds || {}).some(
+      ([pageId, fragmentId]) => pageFragmentIds[pageId] && pageFragmentIds[pageId] !== fragmentId,
+    ))
+) {
+  console.warn(
+    "Registration returned duplicate setup fragments; preserving the checked-in canonical bindings. Run npm run cms:sync-regions to repair the hosted manifest.",
+  );
+}
+
 await writeFile(
   new URL("../cms/site-binding.json", import.meta.url),
-  `${JSON.stringify({ siteId, workspaceId, integrationKey, globalFragmentId, pageFragmentIds }, null, 2)}\n`,
+  `${JSON.stringify(
+    {
+      siteId,
+      workspaceId,
+      integrationKey,
+      globalFragmentId: resolvedGlobalFragmentId,
+      pageFragmentIds: resolvedPageFragmentIds,
+    },
+    null,
+    2,
+  )}\n`,
 );
 
 const envLines = [
@@ -113,7 +147,7 @@ const envLines = [
   `NEXT_PUBLIC_USABLE_CMS_INTEGRATION_KEY=${integrationKey}`,
   "USABLE_API_BASE_URL=https://usable.dev",
   `USABLE_CMS_WORKSPACE_ID=${workspaceId}`,
-  `USABLE_CMS_GLOBAL_CONFIG_FRAGMENT_ID=${globalFragmentId}`,
+  `USABLE_CMS_GLOBAL_CONFIG_FRAGMENT_ID=${resolvedGlobalFragmentId}`,
   ...(serverToken ? [`USABLE_CMS_SERVER_TOKEN=${serverToken}`] : []),
   "CMS_CONTENT_SOURCE=usable",
 ];
@@ -350,6 +384,15 @@ async function readExistingServerToken() {
     return line?.slice("USABLE_CMS_SERVER_TOKEN=".length).trim() || "";
   } catch (error) {
     if (error.code === "ENOENT") return "";
+    throw error;
+  }
+}
+
+async function readExistingBinding() {
+  try {
+    return JSON.parse(await readFile(new URL("../cms/site-binding.json", import.meta.url), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return {};
     throw error;
   }
 }
