@@ -84,4 +84,12 @@ test("machine-readable routes and CMS routing are healthy", async ({ request }) 
   const editor = await request.get("/about?cms=1");
   expect(editor.headers()["x-robots-tag"]).toBe("noindex, nofollow");
   expect(editor.headers()["cache-control"]).toContain("no-store");
+  expect(editor.headers()["x-frame-options"]).toBe("SAMEORIGIN");
+
+  const bridge = await request.get("/cms/umbraco-bridge");
+  expect(bridge.status()).toBe(200);
+  expect(bridge.headers()["x-frame-options"]).toBeUndefined();
+  expect(bridge.headers()["content-security-policy"]).toContain("frame-ancestors");
+  expect(bridge.headers()["cache-control"]).toContain("no-store");
+  expect(bridge.headers()["x-robots-tag"]).toBe("noindex, nofollow");
 });
