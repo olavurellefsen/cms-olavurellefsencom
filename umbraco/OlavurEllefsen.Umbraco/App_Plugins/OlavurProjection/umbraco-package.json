@@ -2,7 +2,7 @@
   "$schema": "../../umbraco-package-schema.json",
   "id": "Olavur.UsableProjection",
   "name": "Olavur Usable Projection",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "allowPublicAccess": true,
   "extensions": [
     {
@@ -11,7 +11,7 @@
       "name": "Usable identity",
       "forProviderName": "Umbraco.Usable",
       "meta": {
-        "label": "Continue with Usable",
+        "label": "Usable",
         "defaultView": {
           "icon": "icon-cloud",
           "color": "positive",
