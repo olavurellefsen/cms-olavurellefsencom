@@ -11,6 +11,7 @@
   - `https://cms.usable.dev/api/setup/skills/usable-cms-wysiwyg-broker-editor`
   - `https://cms.usable.dev/api/setup/skills/usable-cms-page-templates`
 - Re-register idempotently with `npm run cms:register` after completing the device login and setting `USABLE_CMS_SETUP_TOKEN`.
+- After registration, run `npm run cms:sync-regions` with `USABLE_CMS_SETUP_TOKEN` and the server-side `USABLE_CMS_SERVER_TOKEN`; this performs complete manifest-only repair and includes runtime-created pages.
 - Public CMS binding ids live in `cms/site-binding.json`. The editable contract lives in `cms/manifest.json`.
 - One global config fragment and one fragment per page/article are mandatory. Do not collapse content into one site JSON fragment.
 - Public reads use `USABLE_CMS_SERVER_TOKEN` on the server only, with a 60-second revalidation window and checked-in fallback content.

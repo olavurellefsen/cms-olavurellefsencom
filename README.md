@@ -22,9 +22,11 @@ The setup script updates public ids in `cms/site-binding.json` and writes privat
 
 Re-run registration after adding a checked-in page or changing `cms/manifest.json`. Registration is idempotent: it creates any missing page fragment (including the collaboration field note), synchronizes full fragment UUIDs into the CMS manifest, and refreshes `cms/site-binding.json`.
 
-For Umbraco article-editor contract changes, run `npm run cms:sync-regions` with the
-same setup token. This narrow sync preserves runtime-created pages while adding the structured
-`bodyBlocks`, whole-image delete, and hero-visibility paths needed by the native Umbraco editor.
+After registration or an Umbraco article-editor contract change, run
+`npm run cms:sync-regions` with the same setup token and the server-side read token. It discovers
+runtime-created page fragments, repairs the complete hosted manifest page directory, rebinds all
+declarations to the canonical Usable fragments, and adds the structured `bodyBlocks`, whole-image
+delete, and hero-visibility paths needed by the native Umbraco editor.
 
 Run `npm run cms:audit-topology` with the server-side read token to verify the live storage
 shape. The report distinguishes logical pages from duplicate physical fragments and flags any
