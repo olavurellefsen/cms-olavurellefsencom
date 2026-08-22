@@ -80,4 +80,8 @@ test("machine-readable routes and CMS routing are healthy", async ({ request }) 
   const cms = await request.get("/cms?page=about", { maxRedirects: 0 });
   expect([307, 308]).toContain(cms.status());
   expect(cms.headers().location).toBe("/about?cms=1");
+
+  const editor = await request.get("/about?cms=1");
+  expect(editor.headers()["x-robots-tag"]).toBe("noindex, nofollow");
+  expect(editor.headers()["cache-control"]).toContain("no-store");
 });
