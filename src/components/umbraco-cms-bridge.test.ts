@@ -16,6 +16,7 @@ afterEach(() => {
 
 function broker(overrides: Partial<CmsBroker> = {}): CmsBroker {
   return {
+    adoptSession: vi.fn(),
     content: vi.fn(),
     draft: vi.fn(),
     login: vi.fn(),
@@ -28,6 +29,17 @@ function broker(overrides: Partial<CmsBroker> = {}): CmsBroker {
 }
 
 describe("Umbraco CMS bridge", () => {
+  it("adopts an Umbraco-federated session without opening a second login", async () => {
+    const adoptSession = vi.fn(async () => ({ signedIn: true, authorized: true }));
+
+    await expect(
+      performBridgeOperation(broker({ adoptSession }), "adopt-session", {
+        sessionToken: "bs1.federated",
+      }),
+    ).resolves.toMatchObject({ signedIn: true, authorized: true });
+    expect(adoptSession).toHaveBeenCalledWith("bs1.federated");
+  });
+
   it("opens the Usable sign-in outside the embedded bridge and hands the popup its broker URL", async () => {
     const request = vi.fn(async () => ({ loginUrl: "https://cms.usable.dev/api/auth/login" }));
     const replace = vi.fn();

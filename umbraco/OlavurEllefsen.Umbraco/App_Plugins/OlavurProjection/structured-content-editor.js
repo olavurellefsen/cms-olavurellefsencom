@@ -202,6 +202,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
   #dragIndex;
   #nativeBodyBaseline;
   #nativeArticleBaseline;
+  #federating = false;
 
   constructor() {
     super();
@@ -1682,9 +1683,37 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     const frame = this.renderRoot.querySelector("#usable-bridge");
     this.#bridgeOrigin = new URL(frame.src).origin;
     window.setTimeout(() => {
-      void this.#bridgeRequest("session", {}).catch(() => undefined);
+      void this.#bootstrapBridgeSession();
     }, 250);
   };
+
+  async #bootstrapBridgeSession() {
+    if (this.#federating) return;
+    this.#federating = true;
+    try {
+      const response = await fetch("/api/olavur-sync/cms-session", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { accept: "application/json" },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && typeof payload.sessionToken === "string") {
+        await this.#bridgeRequest("adopt-session", { sessionToken: payload.sessionToken });
+        return;
+      }
+
+      if (response.status >= 500) {
+        this._error = payload.message || "Usable identity is temporarily unavailable.";
+      }
+      await this.#bridgeRequest("session", {});
+    } catch (error) {
+      this._error = errorMessage(error);
+      await this.#bridgeRequest("session", {}).catch(() => undefined);
+    } finally {
+      this.#federating = false;
+    }
+  }
 
   async #assertCanonicalBaseline({ workspaceId, fragmentId }) {
     const result = await this.#bridgeRequest("content", {
@@ -1743,6 +1772,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     if (event.source !== frame?.contentWindow) return;
     if (event.data?.type === `${BRIDGE_MESSAGE}:status`) {
       this._bridgeSession = event.data.session;
+      if (event.data.session?.signedIn === false) void this.#bootstrapBridgeSession();
       return;
     }
     if (event.data?.type !== `${BRIDGE_MESSAGE}:response`) return;

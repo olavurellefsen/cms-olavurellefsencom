@@ -2,8 +2,29 @@
   "$schema": "../../umbraco-package-schema.json",
   "id": "Olavur.UsableProjection",
   "name": "Olavur Usable Projection",
-  "version": "0.7.1",
+  "version": "0.8.0",
+  "allowPublicAccess": true,
   "extensions": [
+    {
+      "type": "authProvider",
+      "alias": "Olavur.AuthProvider.Usable",
+      "name": "Usable identity",
+      "forProviderName": "Umbraco.Usable",
+      "meta": {
+        "label": "Continue with Usable",
+        "defaultView": {
+          "icon": "icon-cloud",
+          "color": "positive",
+          "look": "primary"
+        },
+        "behavior": {
+          "autoRedirect": false
+        },
+        "linking": {
+          "allowManualLinking": false
+        }
+      }
+    },
     {
       "type": "propertyEditorUi",
       "alias": "Olavur.PropertyEditorUi.StructuredContent",

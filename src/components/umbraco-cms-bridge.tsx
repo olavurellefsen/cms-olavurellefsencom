@@ -14,6 +14,7 @@ type CmsRevision = { id: string; status?: string };
 
 export type CmsBroker = {
   session(): Promise<CmsSession>;
+  adoptSession(sessionToken: string): Promise<CmsSession>;
   login(returnTo: string, options: { forceLogin?: boolean; sameTab: true }): Promise<unknown>;
   request(
     operation: "login-url",
@@ -28,7 +29,13 @@ export type CmsBroker = {
   ): Promise<{ assetPath?: string; url?: string }>;
 };
 
-export type BridgeOperation = "content" | "draft" | "publish" | "session" | "upload";
+export type BridgeOperation =
+  | "adopt-session"
+  | "content"
+  | "draft"
+  | "publish"
+  | "session"
+  | "upload";
 
 type BridgeRequest = {
   type: "olavur-usable-bridge:request";
@@ -292,6 +299,10 @@ export async function performBridgeOperation(
   operation: BridgeOperation,
   payload: Record<string, unknown>,
 ) {
+  if (operation === "adopt-session") {
+    const sessionToken = typeof payload.sessionToken === "string" ? payload.sessionToken : "";
+    return broker.adoptSession(sessionToken);
+  }
   if (operation === "session") return broker.session();
   if (operation === "content") return broker.content(payload);
   if (operation === "draft") return broker.draft(payload);
