@@ -1579,6 +1579,10 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     this._workflow = "saving";
     this._error = "";
     try {
+      this.#requireBridgeCapability(
+        "edit",
+        "Connect the Usable session before saving a private draft.",
+      );
       const { workspaceId, fragmentId } = this.#binding();
       await this.#assertCanonicalBaseline({ workspaceId, fragmentId });
       const payload = {
@@ -1622,6 +1626,10 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     this._workflow = "publishing";
     this._error = "";
     try {
+      this.#requireBridgeCapability(
+        "publish",
+        "Connect a Usable session with publishing access before publishing.",
+      );
       const validationErrors = this.#validationErrors();
       if (validationErrors.length) throw new Error(validationErrors.join(" "));
       if (this.#changes().length) {
@@ -1692,7 +1700,16 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     }
   }
 
-  #bridgeRequest(operation, payload, timeoutMs = 30000) {
+  #requireBridgeCapability(capability, message) {
+    if (
+      !this._bridgeSession?.authorized ||
+      !this._bridgeSession?.capabilities?.[capability]
+    ) {
+      throw new Error(message);
+    }
+  }
+
+  #bridgeRequest(operation, payload, timeoutMs = 45000) {
     const frame = this.renderRoot.querySelector("#usable-bridge");
     if (!frame?.contentWindow || !this.#bridgeOrigin) {
       return Promise.reject(new Error("The Usable session bridge is not ready."));

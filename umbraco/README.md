@@ -33,7 +33,9 @@ The bridge accepts messages only from the exact local backoffice origins `http:/
 
 In production, the bridge derives its one allowed parent from the server-only
 `UMBRACO_BACKOFFICE_ORIGIN` value on the public app. The checked-in Fly configuration uses
-`https://olavurellefsen-umbraco.fly.dev`.
+`https://olavurellefsen-umbraco.fly.dev`. The bridge route deliberately omits
+`X-Frame-Options` and instead emits a `Content-Security-Policy: frame-ancestors` directive for
+that exact origin. Ordinary site and CMS routes remain `SAMEORIGIN`.
 
 New pages must be created through the Usable CMS page/template flow so the fragment and manifest binding are created atomically. Refresh the projection afterward. Umbraco cannot create an unbound page.
 

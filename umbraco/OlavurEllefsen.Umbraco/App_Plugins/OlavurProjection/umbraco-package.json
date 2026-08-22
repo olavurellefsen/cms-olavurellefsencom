@@ -2,7 +2,7 @@
   "$schema": "../../umbraco-package-schema.json",
   "id": "Olavur.UsableProjection",
   "name": "Olavur Usable Projection",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "extensions": [
     {
       "type": "propertyEditorUi",
