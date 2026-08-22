@@ -75,7 +75,9 @@ const integrationKey =
   result.binding?.integrationKey ||
   result.publicIntegration?.integrationKey ||
   result.publicIntegration?.embedKey ||
+  result.publicIntegration?.key ||
   result.publicEnv?.NEXT_PUBLIC_USABLE_CMS_INTEGRATION_KEY ||
+  result.publicEnv?.NEXT_PUBLIC_USABLE_CMS_KEY ||
   existingBinding.integrationKey ||
   "";
 const globalFragmentId =
