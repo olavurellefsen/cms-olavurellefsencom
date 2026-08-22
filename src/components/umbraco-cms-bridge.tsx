@@ -37,6 +37,20 @@ export type BridgeOperation =
   | "session"
   | "upload";
 
+export async function waitForCmsBroker(
+  getBroker: () => CmsBroker | undefined,
+  wait: (delayMs: number) => Promise<void> = (delayMs) =>
+    new Promise((resolve) => window.setTimeout(resolve, delayMs)),
+  attempts = 80,
+): Promise<CmsBroker> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const broker = getBroker();
+    if (broker) return broker;
+    await wait(100);
+  }
+  throw new Error("The Usable CMS broker could not be loaded.");
+}
+
 type BridgeRequest = {
   type: "olavur-usable-bridge:request";
   requestId: string;
@@ -51,7 +65,6 @@ export function UmbracoCmsBridge({ parentOrigin = "" }: { parentOrigin?: string 
 
   useEffect(() => {
     let cancelled = false;
-    let attempts = 0;
 
     function receiveAuth(event: Event) {
       const detail = (event as CustomEvent<CmsSession & { broker?: CmsBroker }>).detail;
@@ -64,18 +77,14 @@ export function UmbracoCmsBridge({ parentOrigin = "" }: { parentOrigin?: string 
     window.addEventListener("usable-cms-broker:auth", receiveAuth);
 
     async function connect() {
-      const broker = window.usableCmsBroker as unknown as CmsBroker | undefined;
-      if (!broker) {
-        attempts += 1;
-        if (attempts < 80) window.setTimeout(connect, 100);
-        else setError("The Usable CMS broker could not be loaded.");
-        return;
-      }
-
       try {
-        const next = await broker.session();
+        const broker = await waitForCmsBroker(
+          () => window.usableCmsBroker as unknown as CmsBroker | undefined,
+        );
         if (cancelled) return;
         brokerRef.current = broker;
+        const next = await broker.session();
+        if (cancelled) return;
         setSession(next);
         announce(next, parentOrigin);
       } catch (nextError) {
@@ -98,8 +107,12 @@ export function UmbracoCmsBridge({ parentOrigin = "" }: { parentOrigin?: string 
       if (message?.type !== "olavur-usable-bridge:request" || !message.requestId) return;
 
       try {
-        const broker = brokerRef.current;
-        if (!broker) throw new Error("The Usable CMS broker is not ready.");
+        const broker =
+          brokerRef.current ??
+          (await waitForCmsBroker(
+            () => window.usableCmsBroker as unknown as CmsBroker | undefined,
+          ));
+        brokerRef.current = broker;
         const result = await performBridgeOperation(
           broker,
           message.operation,
@@ -114,7 +127,11 @@ export function UmbracoCmsBridge({ parentOrigin = "" }: { parentOrigin?: string 
           },
           { targetOrigin: event.origin },
         );
-        if (message.operation === "session") setSession(result as CmsSession);
+        if (message.operation === "session" || message.operation === "adopt-session") {
+          const next = result as CmsSession;
+          setSession(next);
+          announce(next, parentOrigin);
+        }
       } catch (nextError) {
         event.source?.postMessage(
           {
@@ -135,8 +152,10 @@ export function UmbracoCmsBridge({ parentOrigin = "" }: { parentOrigin?: string 
   async function signIn() {
     setError("");
     try {
-      const broker = brokerRef.current;
-      if (!broker) throw new Error("The Usable CMS broker is not ready.");
+      const broker =
+        brokerRef.current ??
+        (await waitForCmsBroker(() => window.usableCmsBroker as unknown as CmsBroker | undefined));
+      brokerRef.current = broker;
       await openUsableLoginPopup(broker, window.location.href);
     } catch (nextError) {
       setError(messageFrom(nextError));
