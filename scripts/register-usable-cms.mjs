@@ -24,7 +24,10 @@ const payload = {
     "https://www.olavurellefsen.com",
     "https://olavurellefsen.com",
     "https://olavurellefsen-com.fly.dev",
+    "https://olavurellefsen-umbraco.fly.dev",
     "http://localhost:3000",
+    "http://localhost:5099",
+    "http://127.0.0.1:5099",
   ],
   serverTokenAccess: "read-write",
   selectedSkillIds: [

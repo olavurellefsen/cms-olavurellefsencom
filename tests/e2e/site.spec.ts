@@ -66,7 +66,7 @@ test("public pages load Usable Web Analytics for the canonical hostname", async 
   await expect(analytics).toHaveAttribute("data-domain", "www.olavurellefsen.com");
 });
 
-test("machine-readable routes and CMS routing are healthy", async ({ request }) => {
+test("machine-readable routes and CMS routing are healthy", async ({ page, request }) => {
   for (const route of [
     "/health",
     "/robots.txt",
@@ -92,4 +92,12 @@ test("machine-readable routes and CMS routing are healthy", async ({ request }) 
   expect(bridge.headers()["content-security-policy"]).toContain("frame-ancestors");
   expect(bridge.headers()["cache-control"]).toContain("no-store");
   expect(bridge.headers()["x-robots-tag"]).toBe("noindex, nofollow");
+  await page.route("https://cms.usable.dev/broker.js", (route) =>
+    route.fulfill({ contentType: "application/javascript", body: "" }),
+  );
+  await page.goto("/cms/umbraco-bridge");
+  await expect(page.locator("#usable-cms-broker")).toHaveAttribute(
+    "data-ancestor-origins",
+    "https://olavurellefsen-umbraco.fly.dev",
+  );
 });
