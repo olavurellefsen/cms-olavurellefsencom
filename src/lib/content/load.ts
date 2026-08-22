@@ -8,6 +8,7 @@ import {
   type Page,
   pageContentSchema,
 } from "./schema";
+import { fetchUmbracoSiteSnapshot } from "./umbraco";
 
 type FragmentResponse = {
   fragment?: { id?: string; content?: string };
@@ -24,7 +25,7 @@ type FragmentListItem = {
 
 export type LoadedValue<T> = {
   value: T;
-  source: "usable" | "fallback";
+  source: "usable" | "umbraco" | "fallback";
   fragmentId?: string;
 };
 
@@ -124,7 +125,7 @@ function pageArray(payload: unknown): unknown[] {
 
 async function fetchCmsPageReferences(noStore = false): Promise<CmsPageReference[]> {
   const token = process.env.USABLE_CMS_SERVER_TOKEN;
-  if (!token || (process.env.CMS_CONTENT_SOURCE ?? "usable") === "fallback") return [];
+  if (!token || (process.env.CMS_CONTENT_SOURCE ?? "usable") !== "usable") return [];
   const cmsOrigin = (process.env.NEXT_PUBLIC_USABLE_CMS_ORIGIN || "https://cms.usable.dev").replace(
     /\/$/,
     "",
@@ -151,7 +152,7 @@ async function fetchCmsPageReferences(noStore = false): Promise<CmsPageReference
 async function fetchWorkspacePageReferences(noStore = false): Promise<CmsPageReference[]> {
   const token = process.env.USABLE_CMS_SERVER_TOKEN;
   const workspaceId = process.env.USABLE_CMS_WORKSPACE_ID || siteBinding.workspaceId;
-  if (!token || !workspaceId || (process.env.CMS_CONTENT_SOURCE ?? "usable") === "fallback")
+  if (!token || !workspaceId || (process.env.CMS_CONTENT_SOURCE ?? "usable") !== "usable")
     return [];
 
   try {
@@ -207,6 +208,19 @@ async function fetchWorkspacePageReferences(noStore = false): Promise<CmsPageRef
 }
 
 async function loadCmsPageDirectory(noStore = false): Promise<CmsPageReference[]> {
+  if (process.env.CMS_CONTENT_SOURCE === "umbraco") {
+    const snapshot = await fetchUmbracoSiteSnapshot(noStore);
+    if (snapshot) {
+      return snapshot.pages.map((page, order) => ({
+        id: page.id,
+        title: page.title,
+        path: page.path,
+        order,
+        status: page.content.type === "article" ? page.content.status : "published",
+      }));
+    }
+  }
+
   const fallbackReferences: CmsPageReference[] = fallbackSite.pages.map((page, order) => ({
     id: page.id,
     title: page.title,
@@ -252,6 +266,12 @@ export async function getCmsEditorPageDirectory(): Promise<CmsPageReference[]> {
 }
 
 async function loadGlobalContent(noStore = false): Promise<LoadedValue<GlobalContent>> {
+  if (process.env.CMS_CONTENT_SOURCE === "umbraco") {
+    const snapshot = await fetchUmbracoSiteSnapshot(noStore);
+    if (snapshot) return { value: snapshot.global, source: "umbraco" };
+    return { value: fallbackSite.global, source: "fallback" };
+  }
+
   const fragmentId =
     process.env.USABLE_CMS_GLOBAL_CONFIG_FRAGMENT_ID || siteBinding.globalFragmentId;
   const live = await fetchFragment(fragmentId, noStore);
@@ -274,6 +294,13 @@ async function loadPageContent(
   knownReference?: CmsPageReference,
 ): Promise<LoadedValue<Page> | null> {
   const fallback = fallbackPage(pageId);
+  if (process.env.CMS_CONTENT_SOURCE === "umbraco") {
+    const snapshot = await fetchUmbracoSiteSnapshot(noStore);
+    const page = snapshot?.pages.find((candidate) => candidate.id === pageId);
+    if (page) return { value: page, source: "umbraco" };
+    return fallback ? { value: fallback, source: "fallback" } : null;
+  }
+
   const reference =
     knownReference ||
     (noStore

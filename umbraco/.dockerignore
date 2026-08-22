@@ -1,0 +1,6 @@
+**/bin
+**/obj
+**/umbraco/Data
+**/umbraco/Logs
+**/wwwroot/media
+.DS_Store

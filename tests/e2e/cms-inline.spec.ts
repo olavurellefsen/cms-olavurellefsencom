@@ -1,4 +1,3 @@
-import { createRequire } from "node:module";
 import { expect, test } from "@playwright/test";
 import manifest from "../../cms/manifest.json" with { type: "json" };
 import binding from "../../cms/site-binding.json" with { type: "json" };
@@ -56,7 +55,7 @@ test("CMS can refresh an expired Usable login", async ({ page }) => {
     });
   });
 
-  await page.goto("http://localhost:3000/?cms=1");
+  await page.goto("/?cms=1");
   await expect(
     page.getByText("Your Usable login may have expired. Sign in again to refresh access.", {
       exact: true,
@@ -111,7 +110,7 @@ test("CMS offers a fresh login when content access expires during startup", asyn
     });
   });
 
-  await page.goto("http://localhost:3000/?cms=1");
+  await page.goto("/?cms=1");
   await expect(
     page.getByText("Your Usable login may have expired. Sign in again to refresh access.", {
       exact: true,
@@ -124,17 +123,6 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   page,
 }, testInfo) => {
   test.setTimeout(60_000);
-  const sharp = createRequire(import.meta.url)("sharp");
-  const oversizedImage = await sharp({
-    create: {
-      width: 2000,
-      height: 1500,
-      channels: 3,
-      background: { r: 77, g: 121, b: 98 },
-    },
-  })
-    .png()
-    .toBuffer();
 
   await page.route("**/broker.js", async (route) => {
     await route.fulfill({
@@ -207,7 +195,7 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
     });
   });
 
-  await page.goto("http://localhost:3000/?cms=1");
+  await page.goto("/?cms=1");
   await expect(page.getByRole("main", { name: "Usable CMS inline editor" })).toBeVisible();
   const preview = page.frameLocator('iframe[title="Home inline editor"]');
   const contentPanel = page.getByRole("complementary", { name: "content panel" });
@@ -422,191 +410,43 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await page.getByRole("button", { name: "Why I am writing here", exact: true }).click();
   await expect(page).toHaveURL(/\/writing\/why-i-am-writing-here\?cms=1$/);
   const articlePreview = page.frameLocator('iframe[title="Why I am writing here inline editor"]');
-  await expect(articlePreview.getByRole("textbox", { name: "Edit Article body" })).toHaveAttribute(
-    "aria-multiline",
-    "true",
-  );
+  await expect(articlePreview.getByRole("button", { name: "Edit Article body" })).toBeVisible();
 
-  await page.goto("http://localhost:3000/?cms=1");
+  await page.goto("/?cms=1");
   const homePreview = page.frameLocator('iframe[title="Home inline editor"]');
   await homePreview.getByRole("link", { name: "All writing" }).click();
   await expect(page).toHaveURL(/\/writing\?cms=1$/);
 
-  const publicDraftResponse = await page.request.get(
-    "http://localhost:3000/writing/unpublished-e2e",
-  );
+  const publicDraftResponse = await page.request.get("/writing/unpublished-e2e");
   expect(publicDraftResponse.status()).toBe(404);
   expect(await publicDraftResponse.text()).not.toContain(
     "This content must only appear after broker authorization.",
   );
 
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("http://localhost:3000/writing/unpublished-e2e?cms=1");
+  await page.goto("/writing/unpublished-e2e?cms=1");
   await expect(page.getByText("Draft · Usable CMS", { exact: true })).toBeVisible();
   const draftPreview = page.frameLocator('iframe[title="Unpublished E2E note inline editor"]');
   await expect(draftPreview.getByText("Unpublished draft", { exact: true })).toBeVisible();
   await expect(draftPreview.getByRole("textbox", { name: "Edit Article title" })).toHaveText(
     "Unpublished E2E note",
   );
-  await draftPreview.getByRole("textbox", { name: "Edit Article body" }).click();
+  await draftPreview.getByRole("button", { name: "Edit Article body" }).click();
   const articleInspector = page.getByRole("complementary", {
     name: "Selected element settings",
   });
   await expect(
     articleInspector.getByText(
-      "Edit the text directly on the page. Use the + controls between sections to add images or video exactly where they belong.",
+      "These are the same portable blocks projected into Umbraco. Drafts remain private until Publish.",
       { exact: true },
     ),
   ).toBeVisible();
-  await articleInspector.locator("summary").click();
-  const markdownField = articleInspector.getByLabel("Article Markdown");
-  await markdownField.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(0, 0));
-  await articleInspector.getByRole("button", { name: "Section heading" }).click();
-  await expect(markdownField).toHaveValue(/^## Section heading/);
-
-  const draftHeadingInsert = draftPreview.getByRole("group", {
-    name: "Insert media after “Draft heading”",
-  });
-  await page.getByRole("button", { name: "Mobile preview" }).click();
-  await draftHeadingInsert.getByRole("button", { name: "Add media after “Draft heading”" }).click();
-  const mobileMediaMenu = draftHeadingInsert.locator(".cms-article-insert-control__menu");
-  await expect(mobileMediaMenu).toBeVisible();
-  const mobileMenuBounds = await mobileMediaMenu.evaluate((element) => {
-    const bounds = element.getBoundingClientRect();
-    return {
-      bottom: bounds.bottom,
-      left: bounds.left,
-      right: bounds.right,
-      top: bounds.top,
-      viewportHeight: element.ownerDocument.documentElement.clientHeight,
-      viewportWidth: element.ownerDocument.documentElement.clientWidth,
-    };
-  });
-  expect(mobileMenuBounds.left).toBeGreaterThanOrEqual(0);
-  expect(mobileMenuBounds.top).toBeGreaterThanOrEqual(0);
-  expect(mobileMenuBounds.right).toBeLessThanOrEqual(mobileMenuBounds.viewportWidth);
-  expect(mobileMenuBounds.bottom).toBeLessThanOrEqual(mobileMenuBounds.viewportHeight);
+  await articleInspector.getByRole("button", { name: "heading", exact: true }).click();
+  await articleInspector.getByLabel("Heading text").last().fill("A structured section");
   await page.screenshot({
-    path: testInfo.outputPath("cms-article-insertion-menu.png"),
+    path: testInfo.outputPath("cms-structured-article-editor.png"),
     fullPage: true,
   });
-  await draftHeadingInsert.getByRole("button", { name: "Add image after “Draft heading”" }).click();
-  const imageDialog = page.getByRole("dialog", { name: "Add image" });
-  await expect(imageDialog.getByText("After “Draft heading”", { exact: true })).toBeVisible();
-  await imageDialog.locator('input[type="file"]').setInputFiles({
-    name: "IMG_3284.png",
-    mimeType: "image/png",
-    buffer: oversizedImage,
-  });
-  await expect(imageDialog.getByText(/Optimized for the web:/)).toBeVisible();
-  await expect(imageDialog.getByText(/1440×1080/)).toBeVisible();
-  const imagePreview = imageDialog.getByRole("img", { name: "Selected image preview" });
-  await expect(imagePreview).toHaveAttribute("src", /^blob:/);
-  await expect(
-    imageDialog.getByRole("figure").getByText("IMG_3284.webp", { exact: true }),
-  ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("cms-image-upload-preview.png"),
-    fullPage: true,
-  });
-  await imageDialog.getByLabel("Alternative text").fill("A Faroese lake below the mountains");
-  await imageDialog.getByLabel("Caption").fill("The lake list begins here.");
-  await imageDialog.getByLabel("Alignment").selectOption("wide");
-  await imageDialog.getByRole("button", { name: "Add media" }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const calls = (
-          window as Window & {
-            __cmsCalls?: Array<{
-              fileName?: string;
-              fileSize?: number;
-              fileType?: string;
-              operation: string;
-            }>;
-          }
-        ).__cmsCalls;
-        return calls?.find((call) => call.operation === "upload" && call.fileType === "image/webp");
-      }),
-    )
-    .toMatchObject({
-      fileName: "IMG_3284.webp",
-      fileType: "image/webp",
-    });
-  const uploadedImageBytes = await page.evaluate(
-    () =>
-      (
-        window as Window & {
-          __cmsCalls?: Array<{ fileSize?: number; fileType?: string; operation: string }>;
-        }
-      ).__cmsCalls?.find((call) => call.operation === "upload" && call.fileType === "image/webp")
-        ?.fileSize,
-  );
-  expect(uploadedImageBytes).toBeLessThan(oversizedImage.length);
-  await expect(
-    draftPreview.getByRole("img", { name: "A Faroese lake below the mountains" }),
-  ).toBeVisible();
-  await expect(draftPreview.getByText("The lake list begins here.", { exact: true })).toBeVisible();
-  const articleBlockOrder = await draftPreview
-    .locator('[data-usable-cms-path="bodyMarkdown"]')
-    .evaluate((element) =>
-      Array.from(element.children)
-        .filter((child) => !child.hasAttribute("data-cms-article-insert-control"))
-        .map((child) => `${child.tagName}:${child.textContent?.trim() || ""}`),
-    );
-  expect(articleBlockOrder).toEqual([
-    "H2:Section heading",
-    "H2:Draft heading",
-    "FIGURE:The lake list begins here.",
-    "P:This content must only appear after broker authorization.",
-  ]);
-
-  await draftPreview.getByRole("textbox", { name: "Edit Article body" }).click();
-  await articleInspector.getByRole("button", { name: "Edit The lake list begins here." }).click();
-  const editImageDialog = page.getByRole("dialog", { name: "Edit image" });
-  await editImageDialog.getByLabel("Caption").fill("An edited lake caption.");
-  await editImageDialog.getByRole("button", { name: "Save media" }).click();
-  await expect(draftPreview.getByText("An edited lake caption.", { exact: true })).toBeVisible();
-
-  const finalParagraphInsert = draftPreview.getByRole("group", {
-    name: "Insert media after “This content must only appear after broker authoriz…”",
-  });
-  await finalParagraphInsert
-    .getByRole("button", {
-      name: "Add media after “This content must only appear after broker authoriz…”",
-    })
-    .click();
-  await finalParagraphInsert
-    .getByRole("button", {
-      name: "Add video after “This content must only appear after broker authoriz…”",
-    })
-    .click();
-  const videoDialog = page.getByRole("dialog", { name: "Add video" });
-  await videoDialog.locator('input[type="file"]').setInputFiles({
-    name: "lake.mp4",
-    mimeType: "video/mp4",
-    buffer: Buffer.from("video"),
-  });
-  await videoDialog.getByLabel("Accessible label").fill("Ten seconds beside the lake");
-  await videoDialog.getByLabel("Caption").fill("A short lake visit.");
-  await videoDialog.getByLabel("Alignment").selectOption("right");
-  await videoDialog.getByRole("button", { name: "Add media" }).click();
-  await expect(draftPreview.getByLabel("Ten seconds beside the lake")).toBeVisible();
-  await expect(draftPreview.getByText("A short lake visit.", { exact: true })).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("cms-article-media-editor.png"),
-    fullPage: true,
-  });
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const calls = (
-          window as Window & { __cmsCalls?: Array<{ fileType?: string; operation: string }> }
-        ).__cmsCalls;
-        return calls?.some((call) => call.operation === "upload" && call.fileType === "video/mp4");
-      }),
-    )
-    .toBe(true);
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -623,9 +463,8 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
           .flatMap((call) => call.input?.changes || [])
           .some(
             (change) =>
-              change.path === "bodyMarkdown" &&
-              change.afterRef?.includes("usable-media%3A") === false &&
-              change.afterRef?.includes("usable-media:") === true,
+              change.path === "bodyBlocks" &&
+              change.afterRef?.includes("A structured section") === true,
           );
       }),
     )

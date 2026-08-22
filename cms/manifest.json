@@ -250,6 +250,15 @@
       "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
     },
     {
+      "id": "article-ai-strategy-needs-a-living-memory.article.bodyBlocks",
+      "label": "Structured article body",
+      "kind": "text",
+      "path": "bodyBlocks",
+      "scope": "page",
+      "pageId": "article-ai-strategy-needs-a-living-memory",
+      "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
+    },
+    {
       "id": "article-ai-strategy-needs-a-living-memory.article.bodyMarkdown",
       "label": "Article body",
       "kind": "text",
@@ -276,6 +285,24 @@
       "pageId": "article-ai-strategy-needs-a-living-memory",
       "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
     },
+    {
+      "id": "article-ai-strategy-needs-a-living-memory.article.heroImage",
+      "label": "Article hero image",
+      "kind": "image",
+      "path": "heroImage",
+      "scope": "page",
+      "pageId": "article-ai-strategy-needs-a-living-memory",
+      "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
+    },
+    {
+      "id": "article-ai-strategy-needs-a-living-memory.article.showHeroImage",
+      "label": "Show article hero image",
+      "kind": "text",
+      "path": "showHeroImage",
+      "scope": "page",
+      "pageId": "article-ai-strategy-needs-a-living-memory",
+      "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161"
+    },
 
     {
       "id": "article-why-writing-here.article.title",
@@ -290,6 +317,14 @@
       "label": "Article summary",
       "kind": "text",
       "path": "summary",
+      "scope": "page",
+      "pageId": "article-why-writing-here"
+    },
+    {
+      "id": "article-why-writing-here.article.bodyBlocks",
+      "label": "Structured article body",
+      "kind": "text",
+      "path": "bodyBlocks",
       "scope": "page",
       "pageId": "article-why-writing-here"
     },
@@ -318,6 +353,22 @@
       "pageId": "article-why-writing-here"
     },
     {
+      "id": "article-why-writing-here.article.heroImage",
+      "label": "Article hero image",
+      "kind": "image",
+      "path": "heroImage",
+      "scope": "page",
+      "pageId": "article-why-writing-here"
+    },
+    {
+      "id": "article-why-writing-here.article.showHeroImage",
+      "label": "Show article hero image",
+      "kind": "text",
+      "path": "showHeroImage",
+      "scope": "page",
+      "pageId": "article-why-writing-here"
+    },
+    {
       "id": "article-claude-codex-usable-collaboration.article.title",
       "label": "Article title",
       "kind": "text",
@@ -330,6 +381,14 @@
       "label": "Article summary",
       "kind": "text",
       "path": "summary",
+      "scope": "page",
+      "pageId": "article-claude-codex-usable-collaboration"
+    },
+    {
+      "id": "article-claude-codex-usable-collaboration.article.bodyBlocks",
+      "label": "Structured article body",
+      "kind": "text",
+      "path": "bodyBlocks",
       "scope": "page",
       "pageId": "article-claude-codex-usable-collaboration"
     },
@@ -354,6 +413,22 @@
       "label": "Article image alt text",
       "kind": "text",
       "path": "heroImage.alt",
+      "scope": "page",
+      "pageId": "article-claude-codex-usable-collaboration"
+    },
+    {
+      "id": "article-claude-codex-usable-collaboration.article.heroImage",
+      "label": "Article hero image",
+      "kind": "image",
+      "path": "heroImage",
+      "scope": "page",
+      "pageId": "article-claude-codex-usable-collaboration"
+    },
+    {
+      "id": "article-claude-codex-usable-collaboration.article.showHeroImage",
+      "label": "Show article hero image",
+      "kind": "text",
+      "path": "showHeroImage",
       "scope": "page",
       "pageId": "article-claude-codex-usable-collaboration"
     }
