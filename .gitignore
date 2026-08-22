@@ -1,5 +1,6 @@
 node_modules
 .next
+.next-*
 coverage
 .env
 .env.local
@@ -9,3 +10,11 @@ coverage
 .DS_Store
 playwright-report
 test-results
+.cms-sync-state.json
+umbraco/**/bin
+umbraco/**/obj
+umbraco/**/appsettings-schema.Umbraco.Cms.json
+umbraco/**/umbraco-package-schema.json
+umbraco/**/umbraco/Data
+umbraco/**/umbraco/Logs
+umbraco/**/wwwroot/media

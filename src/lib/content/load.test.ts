@@ -29,6 +29,52 @@ describe("article schema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts a draft without a publication date", () => {
+    const result = articleContentSchema.safeParse({
+      type: "article",
+      title: "Draft",
+      slug: "draft",
+      summary: "Draft summary",
+      publishedAt: "",
+      status: "draft",
+      topics: [],
+      canonicalUrl: "https://www.olavurellefsen.com/writing/draft",
+      bodyMarkdown: "Draft body",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("normalizes an Umbraco null publication date for drafts", () => {
+    const result = articleContentSchema.safeParse({
+      type: "article",
+      title: "Draft",
+      slug: "draft",
+      summary: "Draft summary",
+      publishedAt: null,
+      status: "draft",
+      topics: [],
+      canonicalUrl: "https://www.olavurellefsen.com/writing/draft",
+      bodyMarkdown: "Draft body",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.publishedAt).toBe("");
+  });
+
+  it("rejects a published article without a publication date", () => {
+    const result = articleContentSchema.safeParse({
+      type: "article",
+      title: "Published",
+      slug: "published",
+      summary: "Published summary",
+      publishedAt: "",
+      status: "published",
+      topics: [],
+      canonicalUrl: "https://www.olavurellefsen.com/writing/published",
+      bodyMarkdown: "Published body",
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("CMS fragment parsing", () => {

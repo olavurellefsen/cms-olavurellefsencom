@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArticleDirectiveHero, ArticleMarkdown } from "@/components/article-markdown";
+import { ArticleBlocks, ArticleBlocksHero } from "@/components/article-markdown";
 import { articleRegionId } from "@/lib/cms/article-regions";
 import { cmsRegion } from "@/lib/cms/regions";
 import { type CmsSearchParams, isCmsContentRequest } from "@/lib/cms/request";
-import { firstArticleHeroMedia } from "@/lib/content/article-media";
+import { articleBody, firstArticleBodyHero } from "@/lib/content/article-body";
 import { getArticleBySlug, getGlobalContent, getPublishedArticles } from "@/lib/content/load";
 import { safeJsonLd } from "@/lib/seo/json-ld";
 
@@ -36,7 +36,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const loaded = await getArticleBySlug(slug, { noStore: isCmsContentRequest(query) });
   if (!loaded || loaded.value.content.type !== "article") return {};
   const article = loaded.value.content;
-  const directiveHero = firstArticleHeroMedia(article.bodyMarkdown);
+  const body = articleBody(article);
+  const directiveHero = firstArticleBodyHero(body);
   const socialImage = directiveHero?.type === "image" ? directiveHero : article.heroImage;
   return {
     title: article.title,
@@ -64,7 +65,8 @@ export default async function ArticlePage({ params, searchParams }: Props) {
   ]);
   if (!loaded || loaded.value.content.type !== "article") notFound();
   const article = loaded.value.content;
-  const directiveHero = firstArticleHeroMedia(article.bodyMarkdown);
+  const body = articleBody(article);
+  const directiveHero = firstArticleBodyHero(body);
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -121,7 +123,7 @@ export default async function ArticlePage({ params, searchParams }: Props) {
             <p className="article-updated">Updated {formatDate(article.updatedAt)}</p>
           ) : null}
         </header>
-        <ArticleDirectiveHero markdown={article.bodyMarkdown} />
+        <ArticleBlocksHero body={body} />
         {article.heroImage && article.showHeroImage && !directiveHero ? (
           <figure className="article-hero">
             <Image
@@ -151,13 +153,13 @@ export default async function ArticlePage({ params, searchParams }: Props) {
             className="article-prose"
             {...cmsRegion({
               fragmentId: loaded.fragmentId,
-              id: articleRegionId(loaded.value.id, "bodyMarkdown"),
+              id: articleRegionId(loaded.value.id, "bodyBlocks"),
               label: "Article body",
-              path: "bodyMarkdown",
+              path: "bodyBlocks",
               pageId: loaded.value.id,
             })}
           >
-            <ArticleMarkdown markdown={article.bodyMarkdown} />
+            <ArticleBlocks body={body} />
           </div>
         </div>
       </article>

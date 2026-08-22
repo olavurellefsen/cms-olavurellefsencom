@@ -3,6 +3,7 @@ import { siteBinding } from "@/lib/cms/binding";
 import { CmsEditor } from "./cms-editor";
 
 export function CmsEmbed() {
+  if (process.env.CMS_CONTENT_SOURCE === "umbraco") return null;
   const cmsOrigin = (process.env.NEXT_PUBLIC_USABLE_CMS_ORIGIN || "https://cms.usable.dev").replace(
     /\/$/,
     "",

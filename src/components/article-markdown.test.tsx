@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { type ArticleMediaBlock, articleMediaDirective } from "@/lib/content/article-media";
-import { ArticleDirectiveHero, ArticleMarkdown } from "./article-markdown";
+import { ArticleBlocks, ArticleDirectiveHero, ArticleMarkdown } from "./article-markdown";
 
 afterEach(cleanup);
 
@@ -16,6 +16,27 @@ const media: ArticleMediaBlock = {
 };
 
 describe("ArticleMarkdown", () => {
+  it("renders the canonical bodyBlocks contract without stored media directives", () => {
+    render(
+      <ArticleBlocks
+        body={{
+          version: 1,
+          blocks: [
+            { id: "heading-one", type: "heading", level: 2, text: "Structured heading" },
+            { id: "text-one", type: "richText", markdown: "A **portable** section." },
+            { id: "image-one", type: "media", media },
+          ],
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Structured heading", level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("portable").tagName).toBe("STRONG");
+    expect(screen.getByRole("img", { name: media.alt })).toBeInTheDocument();
+  });
+
   it("renders Markdown and inline CMS media with captions", () => {
     render(
       <ArticleMarkdown

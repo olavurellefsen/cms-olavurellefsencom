@@ -1895,6 +1895,10 @@ html.cms-editing body > .site-footer {
   background: #f7f9f7;
 }
 
+.cms-inspector:has(.cms-body-blocks) {
+  width: min(560px, calc(100vw - 28px));
+}
+
 .cms-drawer {
   left: 14px;
 }
@@ -2185,6 +2189,102 @@ html.cms-editing body > .site-footer {
   line-height: 1.55;
 }
 
+.cms-body-blocks,
+.cms-body-blocks__list,
+.cms-body-block,
+.cms-body-block label,
+.cms-body-block__media {
+  display: grid;
+  gap: 10px;
+}
+
+.cms-body-block {
+  padding: 12px;
+  border: 1px solid #d0dad6;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.cms-body-block > header,
+.cms-body-block__row,
+.cms-body-blocks__add {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cms-body-block > header {
+  justify-content: space-between;
+  color: #53615d;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.cms-body-block > header span {
+  display: flex;
+  gap: 3px;
+}
+
+.cms-body-block button,
+.cms-body-blocks__add button {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid #c7d2ce;
+  border-radius: 4px;
+  background: #f8faf9;
+  color: #283b35;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 720;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.cms-body-block button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.cms-body-block input,
+.cms-body-block textarea,
+.cms-body-block select {
+  width: 100%;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #c8d3cf;
+  border-radius: 4px;
+  background: #fff;
+  color: #17211f;
+  font: 13px / 1.5 var(--font-sans);
+}
+
+.cms-body-block textarea {
+  resize: vertical;
+}
+
+.cms-body-block label > span {
+  color: #53615d;
+  font-size: 11px;
+  font-weight: 740;
+}
+
+.cms-body-block__row select {
+  width: 78px;
+}
+
+.cms-body-blocks__add {
+  flex-wrap: wrap;
+  margin: 0;
+  padding-top: 4px;
+  border: 0;
+}
+
+.cms-body-blocks__add > legend {
+  color: #53615d;
+  font-size: 11px;
+  font-weight: 740;
+}
+
 .cms-inspector .cms-upload-control {
   height: 44px;
   cursor: pointer;
@@ -2410,6 +2510,20 @@ html.cms-inline-preview [data-cms-editable="text"] {
   transition:
     outline-color 140ms ease,
     background-color 140ms ease;
+}
+
+html.cms-inline-preview [data-cms-editable="structured"] {
+  position: relative;
+  cursor: pointer;
+  outline: 1px dashed transparent;
+  outline-offset: 7px;
+}
+
+html.cms-inline-preview [data-cms-editable="structured"]:hover,
+html.cms-inline-preview [data-cms-editable="structured"]:focus,
+html.cms-inline-preview [data-cms-editable="structured"][data-cms-selected="true"] {
+  outline-color: #ff7d61;
+  background: rgb(255 125 97 / 5%);
 }
 
 html.cms-inline-preview [data-cms-editable="text"]:hover,

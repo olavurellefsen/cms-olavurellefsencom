@@ -1,12 +1,23 @@
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { articleMarkdownFromBody, firstArticleBodyHero } from "@/lib/content/article-body";
 import {
   type ArticleMediaBlock,
   articleMediaDirective,
   firstArticleHeroMedia,
   parseArticleMarkdown,
 } from "@/lib/content/article-media";
+import type { ArticleBody } from "@/lib/content/schema";
+
+export function ArticleBlocks({ body }: { body: ArticleBody }) {
+  return <ArticleMarkdown markdown={articleMarkdownFromBody(body)} />;
+}
+
+export function ArticleBlocksHero({ body }: { body: ArticleBody }) {
+  const hero = firstArticleBodyHero(body);
+  return hero ? <ArticleMedia media={hero} hero /> : null;
+}
 
 export function ArticleMarkdown({ markdown }: { markdown: string }) {
   const keyCounts = new Map<string, number>();
