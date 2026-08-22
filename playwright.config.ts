@@ -17,8 +17,7 @@ export default defineConfig({
     command: `npm start -- --hostname 127.0.0.1 --port ${port}`,
     env: {
       UMBRACO_BACKOFFICE_ORIGIN:
-        process.env.UMBRACO_BACKOFFICE_ORIGIN ||
-        "https://olavurellefsen-umbraco.fly.dev",
+        process.env.UMBRACO_BACKOFFICE_ORIGIN || "https://olavurellefsen-umbraco.fly.dev",
     },
     url: `${baseURL}/health`,
     reuseExistingServer: true,
