@@ -15,6 +15,10 @@ type CmsRevision = { id: string; status?: string };
 export type CmsBroker = {
   session(): Promise<CmsSession>;
   login(returnTo: string, options: { forceLogin?: boolean; sameTab: true }): Promise<unknown>;
+  request(
+    operation: "login-url",
+    payload: { forceLogin?: boolean; returnTo: string; sameTab?: boolean },
+  ): Promise<{ loginUrl?: string }>;
   content(input: Record<string, unknown>): Promise<Record<string, unknown>>;
   draft(input: Record<string, unknown>): Promise<{ revision: CmsRevision }>;
   publish(input: Record<string, unknown>): Promise<{ revision: CmsRevision }>;
@@ -42,6 +46,16 @@ export function UmbracoCmsBridge({ parentOrigin = "" }: { parentOrigin?: string 
     let cancelled = false;
     let attempts = 0;
 
+    function receiveAuth(event: Event) {
+      const detail = (event as CustomEvent<CmsSession & { broker?: CmsBroker }>).detail;
+      if (!detail || detail.broker !== brokerRef.current) return;
+      const next = sessionFromAuthEvent(detail);
+      setSession(next);
+      announce(next, parentOrigin);
+    }
+
+    window.addEventListener("usable-cms-broker:auth", receiveAuth);
+
     async function connect() {
       const broker = window.usableCmsBroker as unknown as CmsBroker | undefined;
       if (!broker) {
@@ -65,6 +79,7 @@ export function UmbracoCmsBridge({ parentOrigin = "" }: { parentOrigin?: string 
     void connect();
     return () => {
       cancelled = true;
+      window.removeEventListener("usable-cms-broker:auth", receiveAuth);
     };
   }, [parentOrigin]);
 
@@ -113,7 +128,9 @@ export function UmbracoCmsBridge({ parentOrigin = "" }: { parentOrigin?: string 
   async function signIn() {
     setError("");
     try {
-      await brokerRef.current?.login(window.location.href, { forceLogin: true, sameTab: true });
+      const broker = brokerRef.current;
+      if (!broker) throw new Error("The Usable CMS broker is not ready.");
+      await openUsableLoginPopup(broker, window.location.href);
     } catch (nextError) {
       setError(messageFrom(nextError));
     }
@@ -141,6 +158,47 @@ export function UmbracoCmsBridge({ parentOrigin = "" }: { parentOrigin?: string 
       Connected as {session.user?.name || session.user?.email || "Usable editor"}
     </BridgeStatus>
   );
+}
+
+type LoginPopup = {
+  close(): void;
+  location: { replace(url: string): void };
+};
+
+export async function openUsableLoginPopup(
+  broker: CmsBroker,
+  returnTo: string,
+  openPopup: () => LoginPopup | null = () => {
+    const popup = window.open("about:blank", "usableCmsLogin", "popup,width=520,height=720");
+    if (!popup) return null;
+    return {
+      close: () => popup.close(),
+      location: { replace: (url) => popup.location.replace(url) },
+    };
+  },
+) {
+  const popup = openPopup();
+  if (!popup) {
+    throw new Error("Allow pop-ups for this Umbraco site, then sign in with Usable again.");
+  }
+
+  try {
+    const result = await broker.request("login-url", { returnTo, sameTab: false });
+    if (!result.loginUrl) throw new Error("Usable did not return a sign-in URL.");
+    popup.location.replace(result.loginUrl);
+  } catch (error) {
+    popup.close();
+    throw error;
+  }
+}
+
+function sessionFromAuthEvent(detail: CmsSession & { broker?: CmsBroker }): CmsSession {
+  return {
+    signedIn: detail.signedIn,
+    authorized: detail.authorized,
+    user: detail.user,
+    capabilities: detail.capabilities,
+  };
 }
 
 function announce(session: CmsSession, configuredParent: string) {
