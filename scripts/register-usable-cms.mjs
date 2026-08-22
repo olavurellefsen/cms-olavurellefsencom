@@ -24,7 +24,10 @@ const payload = {
     "https://www.olavurellefsen.com",
     "https://olavurellefsen.com",
     "https://olavurellefsen-com.fly.dev",
+    "https://olavurellefsen-umbraco.fly.dev",
     "http://localhost:3000",
+    "http://localhost:5099",
+    "http://127.0.0.1:5099",
   ],
   serverTokenAccess: "read-write",
   selectedSkillIds: [
@@ -72,7 +75,9 @@ const integrationKey =
   result.binding?.integrationKey ||
   result.publicIntegration?.integrationKey ||
   result.publicIntegration?.embedKey ||
+  result.publicIntegration?.key ||
   result.publicEnv?.NEXT_PUBLIC_USABLE_CMS_INTEGRATION_KEY ||
+  result.publicEnv?.NEXT_PUBLIC_USABLE_CMS_KEY ||
   existingBinding.integrationKey ||
   "";
 const globalFragmentId =

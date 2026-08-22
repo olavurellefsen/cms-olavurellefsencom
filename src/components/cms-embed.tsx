@@ -11,6 +11,7 @@ export function CmsEmbed() {
   const siteId = process.env.NEXT_PUBLIC_USABLE_CMS_SITE_ID || siteBinding.siteId;
   const integrationKey =
     process.env.NEXT_PUBLIC_USABLE_CMS_INTEGRATION_KEY || siteBinding.integrationKey;
+  const ancestorOrigins = configuredUmbracoAncestorOrigins();
 
   if (!siteId || !integrationKey) return null;
 
@@ -23,8 +24,19 @@ export function CmsEmbed() {
         data-cms-origin={cmsOrigin}
         data-site={siteId}
         data-token={integrationKey}
+        data-ancestor-origins={ancestorOrigins || undefined}
       />
       <CmsEditor />
     </>
   );
+}
+
+export function configuredUmbracoAncestorOrigins() {
+  const configured = process.env.UMBRACO_BACKOFFICE_ORIGIN || process.env.UMBRACO_ORIGIN || "";
+  try {
+    const url = new URL(configured);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.origin : "";
+  } catch {
+    return "";
+  }
 }
