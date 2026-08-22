@@ -47,9 +47,9 @@ public sealed class UsableBackOfficeExternalLoginProviderOptions : IConfigureNam
             OnExternalLogin = (_, _) => true,
         };
 
-        // Keep the installed local administrator as a production break-glass account
-        // until the federated path has been proven over a normal operating period.
-        options.DenyLocalLogin = false;
+        // When this provider is enabled, Usable is the sole backoffice identity.
+        // Recovery requires explicitly disabling federation and redeploying.
+        options.DenyLocalLogin = true;
     }
 
     public void Configure(BackOfficeExternalLoginProviderOptions options) =>
