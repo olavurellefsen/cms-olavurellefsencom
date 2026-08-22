@@ -101,3 +101,43 @@ test("machine-readable routes and CMS routing are healthy", async ({ page, reque
     "https://olavurellefsen-umbraco.fly.dev",
   );
 });
+
+test("Umbraco bridge opens Usable authentication outside the embedded page", async ({ page }) => {
+  await page.route("https://cms.usable.dev/broker.js", (route) =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `
+        window.__usableLoginRequests = [];
+        window.usableCmsBroker = {
+          session: async () => ({ signedIn: false, authorized: false }),
+          request: async (operation, payload) => {
+            window.__usableLoginRequests.push({ operation, payload });
+            return { loginUrl: window.location.origin + "/health?usable-login=1" };
+          }
+        };
+      `,
+    }),
+  );
+  await page.goto("/cms/umbraco-bridge");
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Sign in with Usable" }).click();
+  const popup = await popupPromise;
+  await popup.waitForURL(/\/health\?usable-login=1$/);
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as Window & {
+              __usableLoginRequests?: Array<{
+                operation: string;
+                payload: { sameTab?: boolean };
+              }>;
+            }
+          ).__usableLoginRequests?.[0],
+      ),
+    )
+    .toMatchObject({ operation: "login-url", payload: { sameTab: false } });
+  await popup.close();
+});
