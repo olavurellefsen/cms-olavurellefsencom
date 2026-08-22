@@ -1,9 +1,32 @@
+using OlavurEllefsen.Umbraco.Identity;
+using Umbraco.Cms.Core.Models.Membership;
+using Umbraco.Cms.Core.Security;
+
 namespace OlavurEllefsen.Umbraco.Sync;
 
 public static class OlavurSyncEndpoints
 {
     public static IEndpointRouteBuilder MapOlavurSyncEndpoints(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapPost("/api/olavur-sync/cms-session", async (
+            IBackOfficeSecurityAccessor security,
+            UsableIdentitySessionService sessions,
+            CancellationToken cancellationToken) =>
+        {
+            IUser? user = security.BackOfficeSecurity?.CurrentUser;
+            if (user is null) return Results.Unauthorized();
+
+            try
+            {
+                BrokerSessionResponse response = await sessions.CreateAsync(user.Key, cancellationToken);
+                return Results.Content(response.Body, "application/json", statusCode: (int)response.StatusCode);
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Json(new { error = "usable_identity_unavailable", message = exception.Message }, statusCode: 503);
+            }
+        });
+
         RouteGroupBuilder group = endpoints.MapGroup("/api/olavur-sync");
         group.AddEndpointFilter(async (context, next) =>
         {

@@ -1,5 +1,6 @@
 
 using OlavurEllefsen.Umbraco.Sync;
+using OlavurEllefsen.Umbraco.Identity;
 using Microsoft.AspNetCore.DataProtection;
 using Umbraco.Cms.Core.Notifications;
 
@@ -19,12 +20,19 @@ builder.Services.AddSingleton<ArticleBodyBlockAdapter>();
 builder.Services.AddSingleton<ArticleRichTextAdapter>();
 builder.Services.AddSingleton<ProjectionWriteGuard>();
 builder.Services.AddHttpClient<UsableProjectionClient>();
+builder.Services.Configure<UsableIdentityOptions>(builder.Configuration.GetSection(UsableIdentityOptions.SectionName));
+builder.Services.AddHttpClient<UsableIdentitySessionService>();
 
-builder.CreateUmbracoBuilder()
+IUmbracoBuilder umbracoBuilder = builder.CreateUmbracoBuilder()
     .AddBackOffice()
     .AddWebsite()
     .AddDeliveryApi()
-    .AddComposers()
+    .AddComposers();
+
+if (builder.Configuration.GetValue<bool>($"{UsableIdentityOptions.SectionName}:Enabled"))
+    umbracoBuilder.AddUsableBackOfficeAuthentication();
+
+umbracoBuilder
     .AddNotificationAsyncHandler<ContentSavingNotification, UsableProjectionSavingHandler>()
     .Build();
 
