@@ -1,0 +1,31 @@
+{
+  "$schema": "../../umbraco-package-schema.json",
+  "id": "Olavur.UsableProjection",
+  "name": "Olavur Usable Projection",
+  "version": "0.7.0",
+  "extensions": [
+    {
+      "type": "propertyEditorUi",
+      "alias": "Olavur.PropertyEditorUi.StructuredContent",
+      "name": "Olavur structured content editor",
+      "element": "/App_Plugins/OlavurProjection/structured-content-editor.js",
+      "elementName": "olavur-structured-content-editor",
+      "meta": {
+        "label": "Olavur structured content",
+        "icon": "icon-edit",
+        "group": "Content",
+        "propertyEditorSchemaAlias": "Umbraco.TextArea",
+        "supportsReadOnly": true
+      }
+    },
+    {
+      "type": "blockEditorCustomView",
+      "alias": "Olavur.BlockEditorCustomView.UsableMediaRte",
+      "name": "Usable image RTE preview",
+      "element": "/App_Plugins/OlavurProjection/usable-media-rte-block.js",
+      "elementName": "olavur-usable-media-rte-block",
+      "forContentTypeAlias": "olavurArticleMediaBlock",
+      "forBlockEditor": "block-rte"
+    }
+  ]
+}

@@ -32,9 +32,12 @@ export function articleRegions(page: Pick<CmsPageReference, "id" | "fragmentId">
   return [
     region("title", "Article title"),
     region("summary", "Article summary"),
+    region("bodyBlocks", "Structured article body"),
     region("bodyMarkdown", "Article body"),
+    region("heroImage", "Article hero image", "image"),
     region("heroImage.src", "Article image", "image"),
     region("heroImage.alt", "Article image alt text"),
+    region("showHeroImage", "Show article hero image"),
     region("publishedAt", "Publication date"),
     region("updatedAt", "Updated date"),
     region("status", "Publication status"),

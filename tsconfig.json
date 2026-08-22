@@ -27,7 +27,13 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next-usable/types/**/*.ts",
+    ".next-usable/dev/types/**/*.ts",
+    ".next-umbraco/types/**/*.ts",
+    ".next-umbraco/dev/types/**/*.ts",
+    ".next-fallback/types/**/*.ts",
+    ".next-fallback/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

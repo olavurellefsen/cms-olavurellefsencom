@@ -8,6 +8,7 @@ import {
   type Page,
   pageContentSchema,
 } from "./schema";
+import { fetchUmbracoSiteSnapshot } from "./umbraco";
 
 type FragmentResponse = {
   fragment?: { id?: string; content?: string };
@@ -24,7 +25,7 @@ type FragmentListItem = {
 
 export type LoadedValue<T> = {
   value: T;
-  source: "usable" | "fallback";
+  source: "usable" | "umbraco" | "fallback";
   fragmentId?: string;
 };
 
@@ -182,6 +183,18 @@ async function fetchWorkspacePageReferences(): Promise<CmsPageReference[]> {
 }
 
 export const getCmsPageDirectory = cache(async (): Promise<CmsPageReference[]> => {
+  if (process.env.CMS_CONTENT_SOURCE === "umbraco") {
+    const snapshot = await fetchUmbracoSiteSnapshot();
+    if (snapshot) {
+      return snapshot.pages.map((page, order) => ({
+        id: page.id,
+        title: page.title,
+        path: page.path,
+        order,
+        status: page.content.type === "article" ? page.content.status : "published",
+      }));
+    }
+  }
   const fallbackReferences: CmsPageReference[] = fallbackSite.pages.map((page, order) => ({
     id: page.id,
     title: page.title,
@@ -195,8 +208,16 @@ export const getCmsPageDirectory = cache(async (): Promise<CmsPageReference[]> =
     fetchWorkspacePageReferences(),
   ]);
   const pages = new Map(fallbackReferences.map((page) => [page.id, page]));
-  for (const page of [...workspacePages, ...cmsPages]) {
-    pages.set(page.id, { ...pages.get(page.id), ...page });
+  for (const page of workspacePages) {
+    if (!pages.has(page.id)) pages.set(page.id, page);
+  }
+  for (const page of cmsPages) {
+    const existing = pages.get(page.id);
+    pages.set(page.id, {
+      ...existing,
+      ...page,
+      fragmentId: siteBinding.pageFragmentIds[page.id] || page.fragmentId || existing?.fragmentId,
+    });
   }
   return [...pages.values()]
     .filter((page) => page.status !== "archived" && page.status !== "hidden")
@@ -204,6 +225,11 @@ export const getCmsPageDirectory = cache(async (): Promise<CmsPageReference[]> =
 });
 
 export const getGlobalContent = cache(async (): Promise<LoadedValue<GlobalContent>> => {
+  if (process.env.CMS_CONTENT_SOURCE === "umbraco") {
+    const snapshot = await fetchUmbracoSiteSnapshot();
+    if (snapshot) return { value: snapshot.global, source: "umbraco" };
+    return { value: fallbackSite.global, source: "fallback" };
+  }
   const fragmentId =
     process.env.USABLE_CMS_GLOBAL_CONFIG_FRAGMENT_ID || siteBinding.globalFragmentId;
   const live = await fetchFragment(fragmentId);
@@ -214,6 +240,12 @@ export const getGlobalContent = cache(async (): Promise<LoadedValue<GlobalConten
 
 export const getPageContent = cache(async (pageId: string): Promise<LoadedValue<Page> | null> => {
   const fallback = fallbackPage(pageId);
+  if (process.env.CMS_CONTENT_SOURCE === "umbraco") {
+    const snapshot = await fetchUmbracoSiteSnapshot();
+    const page = snapshot?.pages.find((candidate) => candidate.id === pageId);
+    if (page) return { value: page, source: "umbraco" };
+    return fallback ? { value: fallback, source: "fallback" } : null;
+  }
   const reference = (await getCmsPageDirectory()).find((page) => page.id === pageId);
   if (!reference && !fallback) return null;
   const fragmentId = reference?.fragmentId || siteBinding.pageFragmentIds[pageId];

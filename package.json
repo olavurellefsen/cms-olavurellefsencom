@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "dev:usable": "CMS_CONTENT_SOURCE=usable NEXT_DIST_DIR=.next-usable next dev --port 3000",
+    "dev:umbraco-site": "CMS_CONTENT_SOURCE=umbraco NEXT_DIST_DIR=.next-umbraco next dev --port 3001",
     "build": "next build",
     "start": "next start",
     "lint": "biome check .",
@@ -14,6 +16,13 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "cms:register": "node scripts/register-usable-cms.mjs",
+    "cms:sync-image-regions": "node scripts/sync-usable-cms-image-regions.mjs",
+    "cms:sync-regions": "node scripts/sync-usable-cms-image-regions.mjs",
+    "cms:sync": "node scripts/sync-cms.mjs",
+    "cms:audit-topology": "node scripts/sync-cms.mjs --audit-topology",
+    "umbraco:build": "dotnet build umbraco/OlavurEllefsen.Umbraco/OlavurEllefsen.Umbraco.csproj",
+    "umbraco:test": "dotnet test umbraco/OlavurEllefsen.Umbraco.Tests/OlavurEllefsen.Umbraco.Tests.csproj",
+    "umbraco:dev": "dotnet run --project umbraco/OlavurEllefsen.Umbraco/OlavurEllefsen.Umbraco.csproj",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {

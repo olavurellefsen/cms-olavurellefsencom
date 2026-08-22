@@ -10,6 +10,10 @@ export default async function CmsPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  if (process.env.CMS_CONTENT_SOURCE === "umbraco") {
+    const umbracoOrigin = process.env.UMBRACO_BACKOFFICE_ORIGIN || process.env.UMBRACO_ORIGIN;
+    if (umbracoOrigin) redirect(new URL("/umbraco", umbracoOrigin).toString());
+  }
   const { page = "home" } = await searchParams;
   const pages = await getCmsPageDirectory();
   const publicPath = pages.find((candidate) => candidate.id === page)?.path || "/";

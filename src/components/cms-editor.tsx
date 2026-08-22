@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChartNoAxesCombined,
   Check,
   ExternalLink,
   History,
@@ -25,6 +26,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TurndownService from "turndown";
 import { articleRegions } from "@/lib/cms/article-regions";
 import type { CmsPageReference } from "@/lib/cms/binding";
+import { articleBodyFromMarkdown } from "@/lib/content/article-body";
+import { type ArticleBody, articleBodySchema } from "@/lib/content/schema";
+import { CmsAnalytics } from "./cms-analytics";
 
 type CmsRegion = {
   id: string;
@@ -81,7 +85,7 @@ type CmsChange = {
   afterRef: string;
 };
 
-type CmsDirtyValue = string | Array<Record<string, unknown>>;
+type CmsDirtyValue = string | Array<Record<string, unknown>> | ArticleBody;
 
 type WorkItem = {
   accent: "coral" | "blue" | "green" | "yellow";
@@ -97,6 +101,7 @@ type CmsRevision = { id: string };
 type CmsVersion = { id: string; createdAt?: string; summary?: string };
 
 type CmsBroker = {
+  sessionToken?: string | null;
   session(): Promise<CmsSession>;
   login(returnTo: string, options: { forceLogin?: boolean; sameTab: true }): Promise<unknown>;
   content(input: { fragmentIds?: string[]; workspaceId?: string }): Promise<{
@@ -154,7 +159,7 @@ const fallbackPages: CmsPageReference[] = [
 
 type EditorStatus = "checking" | "signed-out" | "unauthorized" | "ready" | "error";
 type SaveStatus = "published" | "changed" | "saving" | "saved" | "publishing" | "error";
-type Drawer = "content" | "pages" | "history" | "settings" | null;
+type Drawer = "analytics" | "content" | "pages" | "history" | "settings" | null;
 type CmsViewport = "desktop" | "tablet" | "mobile";
 
 type ChatEntry = { id: string; role: "assistant" | "user"; text: string; ok?: boolean };
@@ -225,7 +230,7 @@ export function CmsEditor() {
   const fragmentsRef = useRef(fragments);
   const registryRef = useRef(registry);
   const focusSnapshotRef = useRef(new Map<string, { html: string; value: string }>());
-  const updateRegionRef = useRef<(regionId: string, value: string) => void>(() => undefined);
+  const updateRegionRef = useRef<(regionId: string, value: CmsDirtyValue) => void>(() => undefined);
   const turndownRef = useRef(
     new TurndownService({ bulletListMarker: "-", codeBlockStyle: "fenced", headingStyle: "atx" }),
   );
@@ -422,11 +427,11 @@ export function CmsEditor() {
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [saveStatus]);
 
-  function updateRegion(regionId: string, value: string) {
+  function updateRegion(regionId: string, value: CmsDirtyValue) {
     const region = registryRef.current[regionId];
     const workLocation = workItemLocation(regionId, region?.path);
     const workCollection = selectedWorkCollection();
-    if (workLocation && workCollection?.fragmentId) {
+    if (workLocation && workCollection?.fragmentId && typeof value === "string") {
       setDirty((current) => {
         const items = workItemsFromState(
           workCollection,
@@ -448,11 +453,11 @@ export function CmsEditor() {
       return;
     }
     const baseline = region?.fragmentId
-      ? readPath(fragmentsRef.current[region.fragmentId], region.path || "")
+      ? readPathValue(fragmentsRef.current[region.fragmentId], region.path || "")
       : "";
     setDirty((current) => {
       const next = { ...current };
-      if (value === baseline) delete next[regionId];
+      if (sameValue(value, baseline)) delete next[regionId];
       else next[regionId] = value;
       return next;
     });
@@ -587,6 +592,29 @@ export function CmsEditor() {
         cleanups.push(() => {
           element.removeEventListener("click", selectImage);
           element.removeEventListener("keydown", imageKeydown);
+        });
+        continue;
+      }
+
+      if (region.path === "bodyBlocks") {
+        element.dataset.cmsEditable = "structured";
+        element.tabIndex = 0;
+        element.setAttribute("role", "button");
+        element.setAttribute("aria-label", `Edit ${region.label}`);
+        const selectBlocks = (event: Event) => {
+          event.preventDefault();
+          setNewWorkOpen(false);
+          setSelectedRegionId(id);
+          setDrawer(null);
+        };
+        const blocksKeydown = (event: KeyboardEvent) => {
+          if (["Enter", " "].includes(event.key)) selectBlocks(event);
+        };
+        element.addEventListener("click", selectBlocks);
+        element.addEventListener("keydown", blocksKeydown);
+        cleanups.push(() => {
+          element.removeEventListener("click", selectBlocks);
+          element.removeEventListener("keydown", blocksKeydown);
         });
         continue;
       }
@@ -838,6 +866,7 @@ export function CmsEditor() {
 
     const id = `article-${slug}`;
     const today = new Date().toISOString().slice(0, 10);
+    const bodyMarkdown = newPage.bodyMarkdown.trim();
     const content = {
       type: "article",
       title: newPage.title.trim(),
@@ -851,7 +880,7 @@ export function CmsEditor() {
         .map((topic) => topic.trim())
         .filter(Boolean),
       canonicalUrl: `https://www.olavurellefsen.com${path}`,
-      bodyMarkdown: newPage.bodyMarkdown.trim(),
+      bodyBlocks: articleBodyFromMarkdown(bodyMarkdown),
     };
 
     setPageOperation("creating");
@@ -1217,6 +1246,19 @@ export function CmsEditor() {
           <button
             type="button"
             className="cms-icon-button"
+            aria-pressed={drawer === "analytics"}
+            onClick={() => {
+              setDrawer((current) => (current === "analytics" ? null : "analytics"));
+              setSelectedRegionId(undefined);
+            }}
+            aria-label="Analytics"
+            title="Usable Web Analytics"
+          >
+            <ChartNoAxesCombined size={17} />
+          </button>
+          <button
+            type="button"
+            className="cms-icon-button"
             aria-pressed={drawer === "settings"}
             onClick={() => {
               setDrawer((current) => (current === "settings" ? null : "settings"));
@@ -1325,7 +1367,10 @@ export function CmsEditor() {
       </section>
 
       {drawer ? (
-        <aside className="cms-drawer" aria-label={`${drawer} panel`}>
+        <aside
+          className={`cms-drawer${drawer === "analytics" ? " cms-drawer--analytics" : ""}`}
+          aria-label={`${drawer} panel`}
+        >
           <header>
             <div>
               <span className="cms-kicker">Usable CMS</span>
@@ -1336,7 +1381,9 @@ export function CmsEditor() {
                     ? "Pages"
                     : drawer === "history"
                       ? "History"
-                      : "Site settings"}
+                      : drawer === "analytics"
+                        ? "Analytics"
+                        : "Site settings"}
               </h2>
             </div>
             <button
@@ -1526,6 +1573,9 @@ export function CmsEditor() {
                 ))}
               </div>
             ) : null}
+            {drawer === "analytics" ? (
+              <CmsAnalytics sessionToken={brokerRef.current?.sessionToken} />
+            ) : null}
           </div>
         </aside>
       ) : null}
@@ -1549,7 +1599,12 @@ export function CmsEditor() {
           </header>
           <div className="cms-inspector__body">
             {selectedRegion.kind === "text" ? (
-              selectedRegion.path === "bodyMarkdown" ? (
+              selectedRegion.path === "bodyBlocks" ? (
+                <CmsArticleBlocksEditor
+                  value={bodyForRegion(selectedRegion, dirty, fragments)}
+                  onChange={(value) => updateRegion(selectedRegion.id, value)}
+                />
+              ) : selectedRegion.path === "bodyMarkdown" ? (
                 <label className="cms-inspector__field">
                   <span>Article Markdown</span>
                   <textarea
@@ -1902,6 +1957,234 @@ export function CmsEditor() {
       ) : null}
     </main>
   );
+}
+
+function CmsArticleBlocksEditor({
+  value,
+  onChange,
+}: {
+  value: ArticleBody;
+  onChange: (value: ArticleBody) => void;
+}) {
+  const update = (index: number, block: ArticleBody["blocks"][number]) => {
+    const blocks = [...value.blocks];
+    blocks[index] = block;
+    onChange({ version: 1, blocks });
+  };
+  const move = (index: number, direction: -1 | 1) => {
+    const destination = index + direction;
+    if (destination < 0 || destination >= value.blocks.length) return;
+    const blocks = [...value.blocks];
+    const [block] = blocks.splice(index, 1);
+    blocks.splice(destination, 0, block);
+    onChange({ version: 1, blocks });
+  };
+  const remove = (index: number) => {
+    onChange({ version: 1, blocks: value.blocks.filter((_, blockIndex) => blockIndex !== index) });
+  };
+  const add = (type: ArticleBody["blocks"][number]["type"]) => {
+    onChange({ version: 1, blocks: [...value.blocks, newCmsArticleBlock(type)] });
+  };
+
+  return (
+    <div className="cms-body-blocks">
+      <p className="cms-inspector__hint">
+        These are the same portable blocks projected into Umbraco. Reorder them here; drafts remain
+        private until Publish.
+      </p>
+      <div className="cms-body-blocks__list">
+        {value.blocks.map((block, index) => (
+          <section className="cms-body-block" key={block.id}>
+            <header>
+              <strong>{block.type === "richText" ? "Text section" : block.type}</strong>
+              <span>
+                <button type="button" onClick={() => move(index, -1)} disabled={index === 0}>
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(index, 1)}
+                  disabled={index === value.blocks.length - 1}
+                >
+                  ↓
+                </button>
+                <button type="button" onClick={() => remove(index)}>
+                  Remove
+                </button>
+              </span>
+            </header>
+            {block.type === "heading" ? (
+              <div className="cms-body-block__row">
+                <select
+                  value={block.level}
+                  onChange={(event) =>
+                    update(index, {
+                      ...block,
+                      level: Number(event.target.value) as 2 | 3 | 4,
+                    })
+                  }
+                >
+                  <option value="2">H2</option>
+                  <option value="3">H3</option>
+                  <option value="4">H4</option>
+                </select>
+                <input
+                  aria-label="Heading text"
+                  value={block.text}
+                  onChange={(event) => update(index, { ...block, text: event.target.value })}
+                />
+              </div>
+            ) : null}
+            {block.type === "richText" ? (
+              <label>
+                <span>
+                  Section text <small>Markdown formatting is supported</small>
+                </span>
+                <textarea
+                  rows={8}
+                  value={block.markdown}
+                  onChange={(event) => update(index, { ...block, markdown: event.target.value })}
+                />
+              </label>
+            ) : null}
+            {block.type === "list" ? (
+              <>
+                <select
+                  value={block.style}
+                  onChange={(event) =>
+                    update(index, {
+                      ...block,
+                      style: event.target.value as "ordered" | "unordered",
+                    })
+                  }
+                >
+                  <option value="unordered">Bulleted list</option>
+                  <option value="ordered">Numbered list</option>
+                </select>
+                <textarea
+                  aria-label="List items"
+                  rows={5}
+                  value={block.items.join("\n")}
+                  onChange={(event) =>
+                    update(index, { ...block, items: event.target.value.split("\n") })
+                  }
+                />
+              </>
+            ) : null}
+            {block.type === "quote" ? (
+              <textarea
+                aria-label="Quote"
+                rows={5}
+                value={block.markdown}
+                onChange={(event) => update(index, { ...block, markdown: event.target.value })}
+              />
+            ) : null}
+            {block.type === "media" ? (
+              <div className="cms-body-block__media">
+                <input
+                  aria-label="Asset URL"
+                  type="url"
+                  placeholder="Asset URL"
+                  value={block.media.src}
+                  onChange={(event) =>
+                    update(index, { ...block, media: { ...block.media, src: event.target.value } })
+                  }
+                />
+                <input
+                  aria-label="Alternative text"
+                  placeholder="Alternative text"
+                  value={block.media.alt}
+                  onChange={(event) =>
+                    update(index, { ...block, media: { ...block.media, alt: event.target.value } })
+                  }
+                />
+                <textarea
+                  aria-label="Caption"
+                  placeholder="Caption"
+                  rows={3}
+                  value={block.media.caption}
+                  onChange={(event) =>
+                    update(index, {
+                      ...block,
+                      media: { ...block.media, caption: event.target.value },
+                    })
+                  }
+                />
+                <select
+                  value={block.media.alignment}
+                  onChange={(event) =>
+                    update(index, {
+                      ...block,
+                      media: {
+                        ...block.media,
+                        alignment: event.target.value as "center" | "wide" | "left" | "right",
+                      },
+                    })
+                  }
+                >
+                  <option value="center">Center</option>
+                  <option value="wide">Wide</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+            ) : null}
+          </section>
+        ))}
+      </div>
+      <fieldset className="cms-body-blocks__add">
+        <legend>Add:</legend>
+        {(["heading", "richText", "list", "quote", "media"] as const).map((type) => (
+          <button type="button" key={type} onClick={() => add(type)}>
+            {type === "richText" ? "Text" : type}
+          </button>
+        ))}
+      </fieldset>
+    </div>
+  );
+}
+
+function bodyForRegion(
+  region: CmsRegion,
+  dirty: Record<string, CmsDirtyValue>,
+  fragments: Record<string, Record<string, unknown>>,
+): ArticleBody {
+  const draft = articleBodySchema.safeParse(dirty[region.id]);
+  if (draft.success) return draft.data;
+  const fragment = fragments[region.fragmentId || ""];
+  const canonical = articleBodySchema.safeParse(readPathValue(fragment, "bodyBlocks"));
+  if (canonical.success) return canonical.data;
+  return articleBodyFromMarkdown(readPath(fragment, "bodyMarkdown"));
+}
+
+function newCmsArticleBlock(
+  type: ArticleBody["blocks"][number]["type"],
+): ArticleBody["blocks"][number] {
+  const id = `block-${crypto.randomUUID()}`;
+  switch (type) {
+    case "heading":
+      return { id, type, level: 2, text: "New section" };
+    case "richText":
+      return { id, type, markdown: "Start writing here." };
+    case "list":
+      return { id, type, style: "unordered", items: ["First item"] };
+    case "quote":
+      return { id, type, markdown: "Quotation" };
+    case "media":
+      return {
+        id,
+        type,
+        media: {
+          id: `asset-${crypto.randomUUID()}`,
+          type: "image",
+          src: "",
+          alt: "",
+          caption: "",
+          placement: "inline",
+          alignment: "center",
+        },
+      };
+  }
 }
 
 function ViewportSwitcher({

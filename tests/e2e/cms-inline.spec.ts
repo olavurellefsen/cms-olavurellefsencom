@@ -66,12 +66,30 @@ test("CMS can refresh an expired Usable login", async ({ page }) => {
 test("CMS edits the real page inline and preserves broker workflows", async ({
   page,
 }, testInfo) => {
+  await page.route("**/api/cms/analytics**", async (route) => {
+    const metric = new URL(route.request().url()).searchParams.get("metric");
+    const data =
+      metric === "timeseries"
+        ? [
+            { date: "2026-08-12", visitors: 4, pageviews: 6 },
+            { date: "2026-08-13", visitors: 8, pageviews: 12 },
+          ]
+        : metric === "pages"
+          ? [{ path: "/writing", visitors: 9, pageviews: 15 }]
+          : metric === "sources"
+            ? [{ source: "google.com", visitors: 7, pageviews: 9 }]
+            : metric === "current-visitors"
+              ? { visitors: 2 }
+              : { visitors: 35, pageviews: 77, bounceRate: 0.42, avgDuration: 61 };
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(data) });
+  });
   await page.route("**/broker.js", async (route) => {
     await route.fulfill({
       contentType: "application/javascript",
       body: `
         window.__cmsCalls = [];
         window.usableCmsBroker = {
+          sessionToken: "bs1.test-session",
           session: async () => ({
             signedIn: true,
             authorized: true,
@@ -126,6 +144,13 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
 
   await page.goto("http://localhost:3000/?cms=1");
   await expect(page.getByRole("main", { name: "Usable CMS inline editor" })).toBeVisible();
+  await page.getByRole("button", { name: "Analytics" }).click();
+  const analyticsPanel = page.getByRole("complementary", { name: "analytics panel" });
+  await expect(analyticsPanel.getByRole("heading", { name: "Analytics" })).toBeVisible();
+  await expect(analyticsPanel.getByText("35", { exact: true })).toBeVisible();
+  await expect(analyticsPanel.getByText("77", { exact: true })).toBeVisible();
+  await expect(analyticsPanel.getByText("/writing", { exact: true })).toBeVisible();
+  await analyticsPanel.getByRole("button", { name: "Close panel" }).click();
   const preview = page.frameLocator('iframe[title="Home inline editor"]');
   const headline = preview.getByRole("textbox", { name: "Edit Home headline" });
   await expect(headline).toHaveAttribute("contenteditable", "true");

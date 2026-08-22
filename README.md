@@ -22,6 +22,14 @@ The setup script updates public ids in `cms/site-binding.json` and writes privat
 
 Re-run registration after adding a checked-in page or changing `cms/manifest.json`. Registration is idempotent: it creates any missing page fragment (including the collaboration field note), synchronizes full fragment UUIDs into the CMS manifest, and refreshes `cms/site-binding.json`.
 
+For Umbraco article-editor contract changes, run `npm run cms:sync-regions` with the
+same setup token. This narrow sync preserves runtime-created pages while adding the structured
+`bodyBlocks`, whole-image delete, and hero-visibility paths needed by the native Umbraco editor.
+
+Run `npm run cms:audit-topology` with the server-side read token to verify the live storage
+shape. The report distinguishes logical pages from duplicate physical fragments and flags any
+global or page fragment that incorrectly contains a nested whole-site `pages` array.
+
 ### Runtime pages and chat
 
 Signed-in editors can use **Pages → New founder note** to create a real `/writing/<slug>` page from the `founder-note` template. Every created page is its own `CMS Page` fragment. **Hide page** archives the page in the CMS manifest without deleting its fragment. Public page discovery is refreshed every 60 seconds, so published runtime pages automatically appear on Writing, RSS, and the sitemap.
@@ -34,11 +42,30 @@ Public pages load the cookie-free Usable Web Analytics tracker for
 `www.olavurellefsen.com`. The exact hostname match keeps local development and the Fly
 candidate hostname out of production analytics.
 
+Signed-in CMS editors can open **Analytics** in the CMS toolbar to see private traffic
+totals, a daily trend, top pages, and top sources without leaving the editor. The site
+validates the editor's short-lived CMS broker session before proxying read-only analytics
+with the server-only `USABLE_WEB_ANALYTICS_API_KEY`. Use a key scoped only to
+`www.olavurellefsen.com`; never expose it through a `NEXT_PUBLIC_` variable.
+
 ## Verification
 
 ```sh
 npm run verify
+npm run umbraco:build
+npm run umbraco:test
 ```
+
+## Optional Umbraco CMS
+
+The repository includes a separate Umbraco backoffice backed by a rebuildable projection of
+the canonical Usable workspace fragments. Its native Block List and Tiptap field editors save private
+draft revisions and publishes them through the user-authenticated Usable broker. Umbraco saves
+only a verified copy of already-published canonical content; Usable remains the only source of
+truth and the default renderer.
+See
+[`umbraco/README.md`](umbraco/README.md) for local setup, source switching, and safe sync
+commands.
 
 ## Deployment
 
