@@ -21,7 +21,7 @@ describe("Umbraco login policy", () => {
         ),
         "utf8",
       ),
-    ) as { extensions: UmbracoExtension[] };
+    ) as { extensions: UmbracoExtension[]; version: string };
     const provider = manifest.extensions.find(
       (extension) =>
         extension.type === "authProvider" && extension.forProviderName === "Umbraco.Usable",
@@ -29,5 +29,6 @@ describe("Umbraco login policy", () => {
 
     expect(provider?.meta?.label).toBe("Usable");
     expect(provider?.meta?.behavior?.autoRedirect).toBe(false);
+    expect(manifest.version).toBe("0.8.3");
   });
 });
