@@ -16,7 +16,7 @@ kill_timeout = "30s"
   Umbraco__CMS__Global__UseHttps = "true"
   Umbraco__CMS__Unattended__InstallUnattended = "true"
   Umbraco__CMS__Unattended__UpgradeUnattended = "true"
-  Umbraco__CMS__WebRouting__UmbracoApplicationUrl = "https://olavurellefsen-umbraco.fly.dev"
+  Umbraco__CMS__WebRouting__UmbracoApplicationUrl = "https://www.olavurellefsen.com"
   UsableProjection__ApiBaseUrl = "https://usable.dev"
 
 [http_service]
