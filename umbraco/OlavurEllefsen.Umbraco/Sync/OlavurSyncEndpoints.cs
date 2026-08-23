@@ -1,6 +1,7 @@
 using OlavurEllefsen.Umbraco.Identity;
 using Umbraco.Cms.Core.Models.Membership;
 using Umbraco.Cms.Core.Security;
+using Umbraco.Cms.Web.Common.Authorization;
 
 namespace OlavurEllefsen.Umbraco.Sync;
 
@@ -25,7 +26,7 @@ public static class OlavurSyncEndpoints
             {
                 return Results.Json(new { error = "usable_identity_unavailable", message = exception.Message }, statusCode: 503);
             }
-        });
+        }).RequireAuthorization(AuthorizationPolicies.BackOfficeAccess);
 
         RouteGroupBuilder group = endpoints.MapGroup("/api/olavur-sync");
         group.AddEndpointFilter(async (context, next) =>
