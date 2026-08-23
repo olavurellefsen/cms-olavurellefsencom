@@ -2,7 +2,7 @@
   "$schema": "../../umbraco-package-schema.json",
   "id": "Olavur.UsableProjection",
   "name": "Olavur Usable Projection",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "allowPublicAccess": true,
   "extensions": [
     {
@@ -38,6 +38,15 @@
         "propertyEditorSchemaAlias": "Umbraco.TextArea",
         "supportsReadOnly": true
       }
+    },
+    {
+      "type": "blockEditorCustomView",
+      "alias": "Olavur.BlockEditorCustomView.SelectedWork",
+      "name": "Selected work card",
+      "element": "/App_Plugins/OlavurProjection/selected-work-block.js",
+      "elementName": "olavur-selected-work-block",
+      "forContentTypeAlias": "olavurSelectedWorkItem",
+      "forBlockEditor": "block-list"
     },
     {
       "type": "blockEditorCustomView",

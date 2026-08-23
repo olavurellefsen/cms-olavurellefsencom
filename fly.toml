@@ -11,7 +11,8 @@ kill_timeout = "5s"
   HOSTNAME = "0.0.0.0"
   NODE_ENV = "production"
   PORT = "3000"
-  UMBRACO_BACKOFFICE_ORIGIN = "https://olavurellefsen-umbraco.fly.dev"
+  UMBRACO_BACKOFFICE_ORIGIN = "https://www.olavurellefsen.com"
+  UMBRACO_GATEWAY_APP = "olavurellefsen-umbraco"
   USABLE_API_BASE_URL = "https://usable.dev"
 
 [http_service]

@@ -35,5 +35,5 @@
     ".next-fallback/types/**/*.ts",
     ".next-fallback/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "umbraco/**/bin", "umbraco/**/obj"]
 }

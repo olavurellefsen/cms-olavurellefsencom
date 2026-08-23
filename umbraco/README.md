@@ -33,9 +33,19 @@ The bridge accepts messages only from the exact local backoffice origins `http:/
 
 In production, the bridge derives its one allowed parent from the server-only
 `UMBRACO_BACKOFFICE_ORIGIN` value on the public app. The checked-in Fly configuration uses
-`https://olavurellefsen-umbraco.fly.dev`. The bridge route deliberately omits
+the canonical `https://www.olavurellefsen.com` origin. The bridge route deliberately omits
 `X-Frame-Options` and instead emits a `Content-Security-Policy: frame-ancestors` directive for
 that exact origin. Ordinary site and CMS routes remain `SAMEORIGIN`.
+
+The public Next.js runtime is also the canonical backoffice gateway. It routes only
+`/umbraco`, `/signin-usable`, `/api/olavur-sync`, and this package's exact App_Plugins path. On
+Fly, `UMBRACO_GATEWAY_APP` returns a cross-app `fly-replay`, so Fly Proxy hands the original
+request directly to Umbraco and preserves upgrade handling. Local development can instead use
+`UMBRACO_GATEWAY_ORIGIN` as an external rewrite. The browser therefore stays on
+`https://www.olavurellefsen.com/umbraco`; the stateful ASP.NET process and its volume remain
+separately deployable. Fly replay requests are limited to 1 MB; Usable Assets uploads bypass
+this gateway. Keep the exact canonical OIDC callback registered alongside the Fly callback
+until the gateway has passed production acceptance.
 
 New pages must be created through the Usable CMS page/template flow so the fragment and manifest binding are created atomically. Refresh the projection afterward. Umbraco cannot create an unbound page.
 
