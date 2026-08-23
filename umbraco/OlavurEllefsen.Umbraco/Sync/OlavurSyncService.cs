@@ -21,9 +21,11 @@ public sealed class OlavurSyncService(
     PropertyEditorCollection propertyEditors,
     IShortStringHelper shortStringHelper,
     ArticleRichTextAdapter articleRichText,
+    SelectedWorkBlockAdapter selectedWork,
     ProjectionWriteGuard writeGuard)
 {
     internal const string DocumentTypeAlias = "olavurSyncedDocument";
+    internal const string HomeDocumentTypeAlias = "olavurHome";
     internal const string ArticleDocumentTypeAlias = "olavurArticle";
     internal const string KindAlias = "syncKind";
     internal const string PageIdAlias = "pageId";
@@ -31,6 +33,7 @@ public sealed class OlavurSyncService(
     internal const string PayloadAlias = "payloadJson";
     internal const string PublishedPayloadAlias = "publishedPayloadJson";
     internal const string DraftRevisionAlias = "usableDraftRevisionId";
+    internal const string SelectedWorkAlias = "selectedWorkBlocks";
     internal const string BodyBlocksAlias = "articleBodyBlocks";
     internal const string ArticleTitleAlias = "articleTitle";
     internal const string ArticleSummaryAlias = "articleSummary";
@@ -49,7 +52,7 @@ public sealed class OlavurSyncService(
             .Where(x => Value(x, KindAlias) == "page")
             .Select(x =>
             {
-                string payloadValue = x.ContentType.Alias == ArticleDocumentTypeAlias
+                string payloadValue = x.ContentType.Alias is ArticleDocumentTypeAlias or HomeDocumentTypeAlias
                     ? Value(x, PublishedPayloadAlias)
                     : Value(x, PayloadAlias);
                 JsonObject payload = ParseObject(payloadValue);
@@ -147,7 +150,13 @@ public sealed class OlavurSyncService(
                 ? payload["content"] as JsonObject ?? new JsonObject()
                 : payload;
             bool isArticle = kind == "page" && canonicalContent["type"]?.GetValue<string>() == "article";
-            IContentType contentType = isArticle ? projectionSchema.ArticleType : projectionSchema.GenericType;
+            bool isHome = kind == "page" &&
+                (canonicalContent["type"]?.GetValue<string>() == "home" || id == "home");
+            IContentType contentType = isArticle
+                ? projectionSchema.ArticleType
+                : isHome
+                    ? projectionSchema.HomeType
+                    : projectionSchema.GenericType;
             document ??= contentService.Create(name, -1, contentType);
             if (document.ContentType.Alias != contentType.Alias)
             {
@@ -170,6 +179,14 @@ public sealed class OlavurSyncService(
                 document.SetValue(ArticleBodyAlias, articleRichText.Project(canonicalContent, projectionSchema.MediaElementKey));
                 document.SetValue(ArticleTopicsAlias, canonicalContent["topics"]?.ToJsonString() ?? "[]");
             }
+            else if (isHome)
+            {
+                document.SetValue(PublishedPayloadAlias, payload.ToJsonString(JsonOptions));
+                document.SetValue(DraftRevisionAlias, null);
+                document.SetValue(
+                    SelectedWorkAlias,
+                    selectedWork.Project(canonicalContent, projectionSchema.SelectedWorkElementKey));
+            }
             document.SetValue(SourceAlias, CanonicalSource(canonical.WorkspaceId, fragmentId));
             document.SetValue(SourceHashAlias, Hash(canonicalContent));
             contentService.Save(document);
@@ -180,10 +197,17 @@ public sealed class OlavurSyncService(
     private async Task<DocumentProjectionSchema> EnsureDocumentTypesAsync()
     {
         GenericDocumentProjectionSchema generic = await EnsureGenericDocumentTypeAsync();
+        SelectedWorkProjectionSchema selectedWorkProjection = await EnsureSelectedWorkProjectionAsync();
+        IContentType home = await EnsureHomeDocumentTypeAsync(selectedWorkProjection.DataType);
         Guid mediaElementKey = generic.ElementKeys[ArticleBodyBlockAdapter.MediaElementAlias];
         IDataType articleRichText = await EnsureArticleRichTextDataTypeAsync(mediaElementKey);
         IContentType article = await EnsureArticleDocumentTypeAsync(articleRichText);
-        return new DocumentProjectionSchema(generic.DocumentType, article, mediaElementKey);
+        return new DocumentProjectionSchema(
+            generic.DocumentType,
+            home,
+            article,
+            mediaElementKey,
+            selectedWorkProjection.ElementKey);
     }
 
     private async Task<IDataType> EnsureArticleRichTextDataTypeAsync(Guid mediaElementKey)
@@ -412,6 +436,140 @@ public sealed class OlavurSyncService(
         return attempt.Result;
     }
 
+    private async Task<IContentType> EnsureHomeDocumentTypeAsync(IDataType selectedWorkDataType)
+    {
+        IDataType textBox = (await dataTypeService.GetByEditorAliasAsync("Umbraco.TextBox")).First();
+        IDataType textArea = (await dataTypeService.GetByEditorAliasAsync("Umbraco.TextArea")).First();
+        IDataType structuredContent = await EnsureStructuredContentDataTypeAsync();
+        var properties = new (string Alias, string Name, IDataType DataType, bool Mandatory)[]
+        {
+            (SelectedWorkAlias, "Selected work", selectedWorkDataType, false),
+            (PayloadAlias, "Home content and Usable publishing", structuredContent, true),
+            (KindAlias, "Sync kind", textBox, true),
+            (PageIdAlias, "Page ID", textBox, true),
+            (PathAlias, "Public path", textBox, true),
+            (PublishedPayloadAlias, "Published Usable payload", textArea, true),
+            (DraftRevisionAlias, "Usable draft revision", textBox, false),
+            (SourceAlias, "Canonical Usable source", textBox, true),
+            (SourceHashAlias, "Published source hash", textBox, true),
+        };
+
+        IContentType? existing = contentTypeService.Get(HomeDocumentTypeAlias);
+        if (existing is not null)
+        {
+            bool needsUpdate = false;
+            if (!existing.PropertyGroups.Any(group => group.Alias == "content"))
+            {
+                existing.AddPropertyGroup("content", "Content");
+                needsUpdate = true;
+            }
+            PropertyGroup contentTab = existing.PropertyGroups.First(group => group.Alias == "content");
+            if (contentTab.Type != PropertyGroupType.Tab)
+            {
+                contentTab.Type = PropertyGroupType.Tab;
+                needsUpdate = true;
+            }
+            if (!existing.PropertyGroups.Any(group => group.Alias == "projection"))
+            {
+                existing.AddPropertyGroup("projection", "Projection details");
+                needsUpdate = true;
+            }
+            PropertyGroup projectionTab = existing.PropertyGroups.First(group => group.Alias == "projection");
+            if (projectionTab.Type != PropertyGroupType.Tab)
+            {
+                projectionTab.Type = PropertyGroupType.Tab;
+                needsUpdate = true;
+            }
+            if (projectionTab.SortOrder != 1) { projectionTab.SortOrder = 1; needsUpdate = true; }
+
+            for (int index = 0; index < properties.Length; index++)
+            {
+                (string alias, string name, IDataType dataType, bool mandatory) = properties[index];
+                IPropertyType? property = existing.PropertyTypes.FirstOrDefault(candidate => candidate.Alias == alias);
+                string expectedGroup = index < 2 ? "content" : "projection";
+                int expectedSortOrder = index < 2 ? index : index - 2;
+                if (property is null)
+                {
+                    PropertyType created = new(shortStringHelper, dataType, alias)
+                    {
+                        Name = name,
+                        SortOrder = expectedSortOrder,
+                        Mandatory = mandatory,
+                    };
+                    existing.AddPropertyType(
+                        created,
+                        expectedGroup,
+                        expectedGroup == "content" ? "Content" : "Projection details");
+                    needsUpdate = true;
+                    continue;
+                }
+                if (property.DataTypeKey != dataType.Key)
+                {
+                    property.DataTypeId = dataType.Id;
+                    property.DataTypeKey = dataType.Key;
+                    needsUpdate = true;
+                }
+                if (property.Name != name) { property.Name = name; needsUpdate = true; }
+                if (property.SortOrder != expectedSortOrder)
+                {
+                    property.SortOrder = expectedSortOrder;
+                    needsUpdate = true;
+                }
+                if (property.Mandatory != mandatory) { property.Mandatory = mandatory; needsUpdate = true; }
+                if (existing.PropertyGroups.First(group => group.PropertyTypes?.Contains(property) == true).Alias != expectedGroup)
+                {
+                    existing.MovePropertyType(alias, expectedGroup);
+                    needsUpdate = true;
+                }
+            }
+            if (needsUpdate)
+                await contentTypeService.UpdateAsync(existing, global::Umbraco.Cms.Core.Constants.Security.SuperUserKey);
+            return existing;
+        }
+
+        Guid contentGroupKey = Guid.NewGuid();
+        Guid projectionGroupKey = Guid.NewGuid();
+        ContentTypeCreateModel model = new()
+        {
+            Alias = HomeDocumentTypeAlias,
+            Name = "Olavur home page",
+            Description = "A native Umbraco home-page editor backed by a canonical Usable fragment.",
+            Icon = "icon-home",
+            AllowedAsRoot = true,
+            Containers =
+            [
+                new ContentTypePropertyContainerModel
+                {
+                    Key = contentGroupKey,
+                    Name = "Content",
+                    Type = "Tab",
+                    SortOrder = 0,
+                },
+                new ContentTypePropertyContainerModel
+                {
+                    Key = projectionGroupKey,
+                    Name = "Projection details",
+                    Type = "Tab",
+                    SortOrder = 1,
+                },
+            ],
+            Properties = properties.Select((property, index) =>
+                Property(
+                    property.Alias,
+                    property.Name,
+                    property.DataType.Key,
+                    index < 2 ? contentGroupKey : projectionGroupKey,
+                    index < 2 ? index : index - 2,
+                    property.Mandatory)).ToArray(),
+        };
+        var attempt = await contentTypeEditingService.CreateAsync(
+            model,
+            global::Umbraco.Cms.Core.Constants.Security.SuperUserKey);
+        if (!attempt.Success || attempt.Result is null)
+            throw new InvalidOperationException($"Could not create Umbraco home-page type: {attempt.Status}");
+        return attempt.Result;
+    }
+
     private async Task<GenericDocumentProjectionSchema> EnsureGenericDocumentTypeAsync()
     {
         IDataType structuredContent = await EnsureStructuredContentDataTypeAsync();
@@ -610,6 +768,62 @@ public sealed class OlavurSyncService(
         return new ArticleBodyProjectionSchema(dataType, elementKeys);
     }
 
+    private async Task<SelectedWorkProjectionSchema> EnsureSelectedWorkProjectionAsync()
+    {
+        IDataType textBox = (await dataTypeService.GetByEditorAliasAsync("Umbraco.TextBox")).First();
+        IDataType textArea = (await dataTypeService.GetByEditorAliasAsync("Umbraco.TextArea")).First();
+        IContentType element = await EnsureElementTypeAsync(
+            SelectedWorkBlockAdapter.ElementAlias,
+            "Selected work item",
+            "icon-briefcase",
+            [
+                ("workName", "Name", textBox, true),
+                ("workRole", "Role", textBox, true),
+                ("workDescription", "Description", textArea, true),
+                ("workHref", "Link", textBox, true),
+                ("workAccent", "Accent (coral, blue, green, or yellow)", textBox, true),
+            ]);
+
+        const string dataTypeName = "Olavur selected work";
+        IDataType? dataType = (await dataTypeService.GetByEditorAliasAsync("Umbraco.BlockList"))
+            .FirstOrDefault(candidate => candidate.Name == dataTypeName);
+        BlockListConfiguration configuration = new()
+        {
+            Blocks =
+            [
+                new BlockListConfiguration.BlockConfiguration
+                {
+                    ContentElementTypeKey = element.Key,
+                },
+            ],
+        };
+        if (!propertyEditors.TryGet("Umbraco.BlockList", out IDataEditor? editor) || editor is null)
+            throw new InvalidOperationException("Umbraco.BlockList is not registered.");
+        IDictionary<string, object> configurationData = editor
+            .GetConfigurationEditor()
+            .FromConfigurationObject(configuration, configurationEditorJsonSerializer);
+        if (dataType is null)
+        {
+            DataType created = new(editor, configurationEditorJsonSerializer, -1)
+            {
+                Name = dataTypeName,
+                EditorUiAlias = "Umb.PropertyEditorUi.BlockList",
+                ConfigurationData = configurationData,
+            };
+            await dataTypeService.CreateAsync(created, global::Umbraco.Cms.Core.Constants.Security.SuperUserKey);
+            dataType = (await dataTypeService.GetByEditorAliasAsync("Umbraco.BlockList"))
+                .First(candidate => candidate.Name == dataTypeName);
+        }
+        else if (dataType.ConfigurationObject is not BlockListConfiguration current ||
+                 current.Blocks.Select(x => x.ContentElementTypeKey)
+                     .SequenceEqual(configuration.Blocks.Select(x => x.ContentElementTypeKey)) is false)
+        {
+            dataType.ConfigurationData = configurationData;
+            await dataTypeService.UpdateAsync(dataType, global::Umbraco.Cms.Core.Constants.Security.SuperUserKey);
+        }
+        return new SelectedWorkProjectionSchema(dataType, element.Key);
+    }
+
     private async Task PolishMediaElementTypeAsync(IContentType media)
     {
         bool needsUpdate = false;
@@ -720,7 +934,7 @@ public sealed class OlavurSyncService(
         {
             Alias = alias,
             Name = name,
-            Description = "Portable article block projected from canonical Usable bodyBlocks.",
+            Description = "Structured content block projected from a canonical Usable fragment.",
             Icon = icon,
             IsElement = true,
             AllowedAsRoot = false,
@@ -759,7 +973,7 @@ public sealed class OlavurSyncService(
     private List<IContent> Documents()
     {
         List<IContent> documents = [];
-        foreach (string alias in new[] { DocumentTypeAlias, ArticleDocumentTypeAlias })
+        foreach (string alias in new[] { DocumentTypeAlias, HomeDocumentTypeAlias, ArticleDocumentTypeAlias })
         {
             IContentType? type = contentTypeService.Get(alias);
             if (type is null) continue;
@@ -818,12 +1032,18 @@ public sealed class OlavurSyncService(
         IDataType DataType,
         IReadOnlyDictionary<string, Guid> ElementKeys);
 
+    private sealed record SelectedWorkProjectionSchema(
+        IDataType DataType,
+        Guid ElementKey);
+
     private sealed record GenericDocumentProjectionSchema(
         IContentType DocumentType,
         IReadOnlyDictionary<string, Guid> ElementKeys);
 
     private sealed record DocumentProjectionSchema(
         IContentType GenericType,
+        IContentType HomeType,
         IContentType ArticleType,
-        Guid MediaElementKey);
+        Guid MediaElementKey,
+        Guid SelectedWorkElementKey);
 }

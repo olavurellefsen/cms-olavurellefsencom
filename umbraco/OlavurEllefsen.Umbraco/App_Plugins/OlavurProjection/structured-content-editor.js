@@ -21,6 +21,10 @@ import {
   applyNativeArticleValues,
   nativeArticleFingerprint,
 } from "./native-article-document.js";
+import {
+  applyNativeHomeValues,
+  nativeHomeFingerprint,
+} from "./native-home-document.js";
 import { requestFederatedCmsSession } from "./backoffice-request.js";
 
 const BRIDGE_MESSAGE = "olavur-usable-bridge";
@@ -205,6 +209,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
   #dragIndex;
   #nativeBodyBaseline;
   #nativeArticleBaseline;
+  #nativeHomeBaseline;
   #federating = false;
 
   constructor() {
@@ -1263,6 +1268,20 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
 
   #renderSelectedWork(content) {
     const items = Array.isArray(content.selectedWork) ? content.selectedWork : [];
+    if (this.#isNativeHomeDocument()) {
+      return html`
+        <section class="native-body-workflow">
+          <div>
+            <span class="kicker">Native Umbraco Block List</span>
+            <h3>Manage selected work above</h3>
+            <p>Use <strong>Selected work</strong> to add, edit, remove, and drag projects into order. Umbraco Save stores the result as a private Usable draft; Save and publish publishes it.</p>
+          </div>
+          <span class="status ${this._nativeBodyState === "changed" ? "status-draft" : "status-published"}">
+            ${this._nativeBodyState === "changed" ? "Changes ready" : `${items.length} items`}
+          </span>
+        </section>
+      `;
+    }
     return html`
       <section class="collection">
         <div class="collection-heading"><h3>Selected work</h3><span>${items.length} items</span></div>
@@ -1476,10 +1495,24 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     );
   }
 
+  #isNativeHomeDocument() {
+    return Boolean(
+      this.#workspaceContext
+        ?.getValues?.()
+        ?.some((entry) => entry.alias === "selectedWorkBlocks"),
+    );
+  }
+
+  #isNativeCanonicalDocument() {
+    return this.#isNativeArticleDocument() || this.#isNativeHomeDocument();
+  }
+
   #receiveNativeValues(values) {
     if (!Array.isArray(values)) return;
     if (values.some((entry) => entry.alias === "articleBody")) {
       this.#receiveNativeArticleValues(values);
+    } else if (values.some((entry) => entry.alias === "selectedWorkBlocks")) {
+      this.#receiveNativeHomeValues(values);
     } else {
       this.#receiveNativeBodyValues(values);
     }
@@ -1491,6 +1524,20 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     if (fingerprint === this.#nativeArticleBaseline) return;
     this.#nativeArticleBaseline = fingerprint;
     const next = applyNativeArticleValues(this._working, values);
+    if (!same(next, this._working)) {
+      this.#commitWorking(next);
+      this._nativeBodyState = "changed";
+    } else {
+      this._nativeBodyState = "projected";
+    }
+  }
+
+  #receiveNativeHomeValues(values) {
+    if (!this._working || contentKind(this._working) !== "home") return;
+    const fingerprint = nativeHomeFingerprint(values);
+    if (fingerprint === this.#nativeHomeBaseline) return;
+    this.#nativeHomeBaseline = fingerprint;
+    const next = applyNativeHomeValues(this._working, values);
     if (!same(next, this._working)) {
       this.#commitWorking(next);
       this._nativeBodyState = "changed";
@@ -1531,7 +1578,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     this._nativeBodyState = "changed";
   }
 
-  #readNativeBodyFromWorkspace() {
+  #readNativeValuesFromWorkspace() {
     const values = this.#workspaceContext?.getValues?.();
     if (Array.isArray(values)) this.#receiveNativeValues(values);
   }
@@ -1540,8 +1587,8 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     if (this.#workspaceContext && !this.#requestSaveWrapper) {
       this.#originalRequestSave = this.#workspaceContext.requestSave.bind(this.#workspaceContext);
       this.#requestSaveWrapper = async (options) => {
-        if (this.#isNativeArticleDocument()) {
-          this.#readNativeBodyFromWorkspace();
+        if (this.#isNativeCanonicalDocument()) {
+          this.#readNativeValuesFromWorkspace();
           if (this.#changes().length) await this.#saveDraft();
         }
         return this.#originalRequestSave(options);
@@ -1551,7 +1598,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     if (this.#publishingContext && !this.#saveAndPublishWrapper) {
       this.#originalSaveAndPublish = this.#publishingContext.saveAndPublish.bind(this.#publishingContext);
       this.#saveAndPublishWrapper = async (options) => {
-        if (this.#isNativeArticleDocument()) await this.#publishCanonical();
+        if (this.#isNativeCanonicalDocument()) await this.#publishCanonical();
         return this.#originalSaveAndPublish(options);
       };
       this.#publishingContext.saveAndPublish = this.#saveAndPublishWrapper;
@@ -1574,7 +1621,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
   }
 
   #saveDraft = async () => {
-    this.#readNativeBodyFromWorkspace();
+    this.#readNativeValuesFromWorkspace();
     const changes = this.#changes();
     if (!changes.length) return;
     const validationErrors = this.#validationErrors();
@@ -1629,7 +1676,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
   };
 
   #publishCanonical = async () => {
-    this.#readNativeBodyFromWorkspace();
+    this.#readNativeValuesFromWorkspace();
     this._workflow = "publishing";
     this._error = "";
     try {
@@ -1661,6 +1708,13 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
         ?.getValues?.()
         ?.find((entry) => entry.alias === "articleBodyBlocks")?.value;
       if (nativeValue !== undefined) this.#nativeBodyBaseline = nativeBlockListFingerprint(nativeValue);
+      const nativeValues = this.#workspaceContext?.getValues?.() || [];
+      if (this.#isNativeArticleDocument()) {
+        this.#nativeArticleBaseline = nativeArticleFingerprint(nativeValues);
+      }
+      if (this.#isNativeHomeDocument()) {
+        this.#nativeHomeBaseline = nativeHomeFingerprint(nativeValues);
+      }
       this._nativeBodyState = "projected";
       removeCache(cacheKey(this._working));
       await this.updateComplete;

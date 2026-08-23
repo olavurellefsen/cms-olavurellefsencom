@@ -10,6 +10,7 @@ export default defineConfig({
       "umbraco/OlavurEllefsen.Umbraco/App_Plugins/OlavurProjection/backoffice-request.test.js",
       "umbraco/OlavurEllefsen.Umbraco/App_Plugins/OlavurProjection/native-article-blocks.test.js",
       "umbraco/OlavurEllefsen.Umbraco/App_Plugins/OlavurProjection/native-article-document.test.js",
+      "umbraco/OlavurEllefsen.Umbraco/App_Plugins/OlavurProjection/native-home-document.test.js",
     ],
     setupFiles: ["./vitest.setup.ts"],
   },
