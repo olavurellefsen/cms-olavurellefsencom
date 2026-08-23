@@ -18,6 +18,7 @@ if (!string.IsNullOrWhiteSpace(dataProtectionPath))
 builder.Services.AddSingleton<OlavurSyncService>();
 builder.Services.AddSingleton<ArticleBodyBlockAdapter>();
 builder.Services.AddSingleton<ArticleRichTextAdapter>();
+builder.Services.AddSingleton<SelectedWorkBlockAdapter>();
 builder.Services.AddSingleton<ProjectionWriteGuard>();
 builder.Services.AddHttpClient<UsableProjectionClient>();
 builder.Services.Configure<UsableIdentityOptions>(builder.Configuration.GetSection(UsableIdentityOptions.SectionName));

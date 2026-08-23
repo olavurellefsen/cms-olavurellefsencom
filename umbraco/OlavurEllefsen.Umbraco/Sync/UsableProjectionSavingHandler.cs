@@ -10,7 +10,8 @@ public sealed class UsableProjectionSavingHandler(
     ProjectionWriteGuard writeGuard,
     UsableProjectionClient usable,
     IContentService contentService,
-    ArticleRichTextAdapter articleRichText) : INotificationAsyncHandler<ContentSavingNotification>
+    ArticleRichTextAdapter articleRichText,
+    SelectedWorkBlockAdapter selectedWork) : INotificationAsyncHandler<ContentSavingNotification>
 {
     private static readonly string[] ImmutableAliases =
     [
@@ -27,7 +28,10 @@ public sealed class UsableProjectionSavingHandler(
     {
         if (writeGuard.IsSuppressed) return;
         List<IContent> projected = notification.SavedEntities
-            .Where(x => x.ContentType.Alias is OlavurSyncService.DocumentTypeAlias or OlavurSyncService.ArticleDocumentTypeAlias)
+            .Where(x => x.ContentType.Alias is
+                OlavurSyncService.DocumentTypeAlias or
+                OlavurSyncService.HomeDocumentTypeAlias or
+                OlavurSyncService.ArticleDocumentTypeAlias)
             .ToList();
         if (projected.Count == 0) return;
         if (projected.Count > 1)
@@ -64,11 +68,15 @@ public sealed class UsableProjectionSavingHandler(
             JsonObject content = OlavurSyncService.CanonicalContent(candidate);
             JsonObject persistedContent = OlavurSyncService.CanonicalContent(persisted);
             bool nativeArticle = candidate.ContentType.Alias == OlavurSyncService.ArticleDocumentTypeAlias;
-            if (nativeArticle)
+            bool nativeHome = candidate.ContentType.Alias == OlavurSyncService.HomeDocumentTypeAlias;
+            if (nativeArticle || nativeHome)
             {
-                if (!ArticleNativeMatches(candidate, content))
+                bool nativeMatches = nativeArticle
+                    ? ArticleNativeMatches(candidate, content)
+                    : HomeNativeMatches(candidate, content);
+                if (!nativeMatches)
                     throw new UsableProjectionDraftRequiredException(
-                        "The native article fields do not match the Usable draft payload. Wait for the publishing panel to synchronize, then save again.");
+                        "The native Umbraco fields do not match the Usable draft payload. Wait for the publishing panel to synchronize, then save again.");
 
                 ValidateAllowedChanges(candidate, persisted, persistedContent, content);
 
@@ -85,12 +93,12 @@ public sealed class UsableProjectionSavingHandler(
                         "The published projection must match the current Usable draft before Umbraco can publish it.");
 
                 ValidateAllowedChanges(candidate, persisted, persistedPublishedContent, publishedContent);
-                string articleVerifiedHash = await usable.VerifyPublishedAsync(
+                string nativeVerifiedHash = await usable.VerifyPublishedAsync(
                     fragmentId,
                     publishedContent,
                     OlavurSyncService.Value(persisted, OlavurSyncService.SourceHashAlias),
                     cancellationToken);
-                candidate.SetValue(OlavurSyncService.SourceHashAlias, articleVerifiedHash);
+                candidate.SetValue(OlavurSyncService.SourceHashAlias, nativeVerifiedHash);
                 return;
             }
             if (JsonNode.DeepEquals(content, persistedContent)) return;
@@ -128,6 +136,11 @@ public sealed class UsableProjectionSavingHandler(
         catch { return false; }
         return JsonNode.DeepEquals(expectedTopics, actualTopics);
     }
+
+    private bool HomeNativeMatches(IContent candidate, JsonObject content) =>
+        selectedWork.MatchesCanonical(
+            content,
+            OlavurSyncService.Value(candidate, OlavurSyncService.SelectedWorkAlias));
 
     private static JsonObject PublishedContent(JsonObject payload) =>
         payload["content"] as JsonObject ?? new JsonObject();

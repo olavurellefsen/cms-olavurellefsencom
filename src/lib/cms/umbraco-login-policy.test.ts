@@ -29,6 +29,6 @@ describe("Umbraco login policy", () => {
 
     expect(provider?.meta?.label).toBe("Usable");
     expect(provider?.meta?.behavior?.autoRedirect).toBe(false);
-    expect(manifest.version).toBe("0.8.3");
+    expect(manifest.version).toBe("0.9.0");
   });
 });
