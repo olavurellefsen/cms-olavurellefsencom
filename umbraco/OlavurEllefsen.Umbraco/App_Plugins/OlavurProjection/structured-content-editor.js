@@ -1,3 +1,4 @@
+import { UMB_AUTH_CONTEXT } from "@umbraco-cms/backoffice/auth";
 import { UmbChangeEvent } from "@umbraco-cms/backoffice/event";
 import { css, html, nothing } from "@umbraco-cms/backoffice/external/lit";
 import { UmbLitElement } from "@umbraco-cms/backoffice/lit-element";
@@ -20,6 +21,7 @@ import {
   applyNativeArticleValues,
   nativeArticleFingerprint,
 } from "./native-article-document.js";
+import { requestFederatedCmsSession } from "./backoffice-request.js";
 
 const BRIDGE_MESSAGE = "olavur-usable-bridge";
 
@@ -1695,12 +1697,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     if (this.#federating) return;
     this.#federating = true;
     try {
-      const response = await fetch("/api/olavur-sync/cms-session", {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { accept: "application/json" },
-      });
+      const response = await requestFederatedCmsSession(this, UMB_AUTH_CONTEXT);
       const payload = await response.json().catch(() => ({}));
       if (response.ok && typeof payload.sessionToken === "string") {
         await this.#bridgeRequest("adopt-session", { sessionToken: payload.sessionToken });
