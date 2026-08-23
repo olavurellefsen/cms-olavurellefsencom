@@ -15,14 +15,12 @@ const nextConfig: NextConfig = {
   },
   poweredByHeader: false,
   async redirects() {
-    return [
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "olavurellefsen.com" }],
-        destination: "https://www.olavurellefsen.com/:path*",
-        permanent: true,
-      },
-    ];
+    return ["olavurellefsen.com", "ellefsen.fo", "www.ellefsen.fo"].map((host) => ({
+      source: "/:path*",
+      has: [{ type: "host" as const, value: host }],
+      destination: "https://www.olavurellefsen.com/:path*",
+      permanent: true,
+    }));
   },
   async headers() {
     return [

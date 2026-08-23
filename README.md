@@ -36,6 +36,13 @@ Signed-in editors can use **Pages → New founder note** to create a real `/writ
 
 The editor includes embedded Usable chat. It receives the active page fragment, published baseline, working draft, changed paths, and manifest, allowing the broker to safely create, read, update, publish, and hide declared CMS content. The browser only receives the public `ucms_` integration key; `USABLE_CMS_SERVER_TOKEN` remains server-only.
 
+## Domains
+
+`www.olavurellefsen.com` is canonical. `olavurellefsen.com`, `ellefsen.fo`, and `www.ellefsen.fo`
+point at the same Fly app and are permanently redirected to the canonical host by
+`next.config.ts`. Each alias needs its own Fly certificate (`fly certs add <host>`) plus the
+matching `_acme-challenge` CNAME in Route 53.
+
 ## Web analytics
 
 Public pages load the cookie-free Usable Web Analytics tracker for
