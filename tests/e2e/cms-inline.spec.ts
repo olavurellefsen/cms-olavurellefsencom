@@ -248,73 +248,27 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
   await expect(page.locator(".cms-preview--mobile")).toHaveCSS("width", "390px");
 
   await page.getByRole("button", { name: "Desktop preview" }).click();
-  await preview.getByRole("button", { name: "Add work item" }).click();
-  const newWorkInspector = page.getByRole("complementary", { name: "Add Current work" });
-  await newWorkInspector.getByLabel("Name").fill("Example Project");
-  await newWorkInspector.getByLabel("Role").fill("Advisor");
-  await newWorkInspector.getByLabel("Description").fill("A new long-horizon project.");
-  await newWorkInspector.getByLabel("Work URL").fill("https://example.com/");
-  await newWorkInspector.getByRole("button", { name: "Add to draft" }).click();
-  await expect(
-    preview.locator(".work-list").getByText("Example Project", { exact: true }),
-  ).toBeVisible();
-  await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText(
-    "Example Project",
+  await expect(preview.getByRole("button", { name: "Add work item" })).toHaveCount(0);
+  const firstWorkName = preview.locator('[data-usable-cms-path="selectedWork.0.name"]');
+  await expect(firstWorkName).toHaveAttribute("data-cms-editable", "read-only");
+  await expect(firstWorkName).not.toHaveAttribute("contenteditable", "true");
+  await expect(firstWorkName).toHaveAttribute(
+    "title",
+    "Manage this stable collection in the native Umbraco Block List editor.",
   );
-  const workInspector = page.getByRole("complementary", { name: "Selected element settings" });
-  await expect(workInspector.getByLabel("Work URL")).toHaveValue("https://example.com/");
-  await workInspector.getByLabel("Work URL").fill("https://example.org/long-horizon");
-  await workInspector.getByRole("button", { name: "Close inspector" }).click();
-  await preview.getByRole("button", { name: "Move Example Project up" }).click();
-  await expect(preview.getByRole("textbox", { name: "Edit Work 4 name" })).toHaveText(
-    "Example Project",
-  );
-  await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText("Tøkni");
-  await expect(preview.getByRole("button", { name: "Move Example Project down" })).toBeEnabled();
-
-  await page.reload();
-  await expect(page.getByRole("main", { name: "Usable CMS inline editor" })).toBeVisible();
-  await expect(
-    preview.locator(".work-list").getByText("Example Project", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
-  await expect(preview.getByRole("textbox", { name: "Edit Work 4 name" })).toHaveText(
-    "Example Project",
-  );
-
   await openContentPanel();
   const currentWorkManager = page.getByRole("region", { name: "Current work" });
   await expect(
-    currentWorkManager.getByRole("group", {
-      name: "Example Project order and removal controls",
-    }),
+    currentWorkManager.getByText(
+      "Selected work uses stable-ID commands and is read-only here. Manage it in the native Umbraco Block List editor.",
+      { exact: true },
+    ),
   ).toBeVisible();
   await expect(currentWorkManager.getByRole("button", { name: "Move Usable up" })).toBeDisabled();
-  await currentWorkManager.getByRole("button", { name: "Move Example Project down" }).click();
-  await expect(preview.getByRole("textbox", { name: "Edit Work 5 name" })).toHaveText(
-    "Example Project",
-  );
-  await currentWorkManager.getByRole("button", { name: "Move Example Project up" }).click();
-  await expect(preview.getByRole("textbox", { name: "Edit Work 4 name" })).toHaveText(
-    "Example Project",
-  );
-
-  await currentWorkManager.getByRole("button", { name: "Remove Usable from Current work" }).click();
+  await expect(currentWorkManager.getByRole("button", { name: "Move Usable down" })).toBeDisabled();
   await expect(
-    preview.locator(".work-list").getByText("Usable", { exact: true }),
-  ).not.toBeVisible();
-  const removalToast = page.locator(".cms-toast--action");
-  await expect(removalToast).toContainText("Removed Usable from draft");
-  await removalToast.getByRole("button", { name: "Undo" }).click();
-  await expect(preview.locator(".work-list").getByText("Usable", { exact: true })).toBeVisible();
-  await openContentPanel();
-  await currentWorkManager.getByRole("button", { name: "Remove Usable from Current work" }).click();
-  await expect(
-    preview.locator(".work-list").getByText("Usable", { exact: true }),
-  ).not.toBeVisible();
-  await expect(preview.getByRole("textbox", { name: "Edit Work 1 name" })).toHaveText(
-    "University of the Faroe Islands",
-  );
+    currentWorkManager.getByRole("button", { name: "Remove Usable from Current work" }),
+  ).toBeDisabled();
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -326,22 +280,10 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
             }>;
           }
         ).__cmsCalls;
-        const change = calls
+        return !calls
           ?.filter((call) => call.operation === "draft")
           .flatMap((call) => call.input?.changes || [])
-          .reverse()
-          .find((candidate) => candidate.path === "selectedWork");
-        if (!change?.afterRef) return false;
-        const items = JSON.parse(change.afterRef) as Array<{ href?: string; name?: string }>;
-        return (
-          items.some(
-            (item) =>
-              item.name === "Example Project" && item.href === "https://example.org/long-horizon",
-          ) &&
-          items.findIndex((item) => item.name === "Example Project") <
-            items.findIndex((item) => item.name === "Tøkni") &&
-          !items.some((item) => item.name === "Usable")
-        );
+          .some((candidate) => candidate.path === "selectedWork");
       }),
     )
     .toBe(true);
@@ -352,8 +294,7 @@ test("CMS edits the real page inline and preserves broker workflows", async ({
     writingManager.getByRole("button", { name: "Hide Why I am writing here from Writing" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Close panel" }).click();
-  await page.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(page.getByText("Published", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Published", exact: true })).toBeDisabled();
 
   await page.getByRole("button", { name: "Pages" }).click();
   await expect(page.getByRole("navigation", { name: "Website pages" })).toBeVisible();

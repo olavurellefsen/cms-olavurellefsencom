@@ -40,6 +40,20 @@
       }
     },
     {
+      "type": "propertyEditorUi",
+      "alias": "Olavur.PropertyEditorUi.HiddenManagedValue",
+      "name": "Olavur hidden managed value",
+      "element": "/App_Plugins/OlavurProjection/hidden-managed-value.js",
+      "elementName": "olavur-hidden-managed-value",
+      "meta": {
+        "label": "Hidden managed value",
+        "icon": "icon-lock",
+        "group": "Content",
+        "propertyEditorSchemaAlias": "Umbraco.Label",
+        "supportsReadOnly": true
+      }
+    },
+    {
       "type": "blockEditorCustomView",
       "alias": "Olavur.BlockEditorCustomView.SelectedWork",
       "name": "Selected work card",

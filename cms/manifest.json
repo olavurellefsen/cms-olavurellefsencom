@@ -1,6 +1,23 @@
 {
-  "id": "olavurellefsen-site-manifest",
-  "version": 1,
+  "id": "42782a7c-6918-4e84-b08b-cc3c859621ab",
+  "siteId": "42782a7c-6918-4e84-b08b-cc3c859621ab",
+  "workspaceId": "f10b2793-6ac0-43c8-902c-5eb0a55f3713",
+  "version": 2,
+  "schemaVersion": "cms-manifest.2",
+  "compatibility": {
+    "readableVersions": [1, 2],
+    "writableVersions": [2],
+    "minimumAdapterVersion": 2
+  },
+  "projectionCompatibility": {
+    "keyVersion": 1,
+    "legacyKey": "f10b2793-6ac0-43c8-902c-5eb0a55f3713:manifest:42782a7c-6918-4e84-b08b-cc3c859621ab",
+    "retirement": {
+      "allSitesOnVersion": 2,
+      "allAdaptersSupportVersion": 2,
+      "projectionRebuildVerified": false
+    }
+  },
   "regions": [
     {
       "id": "global.siteName",
@@ -121,14 +138,6 @@
       "label": "Work section title",
       "kind": "text",
       "path": "selectedWorkTitle",
-      "scope": "page",
-      "pageId": "home"
-    },
-    {
-      "id": "home.selectedWorkValue",
-      "label": "Selected work items",
-      "kind": "text",
-      "path": "selectedWork",
       "scope": "page",
       "pageId": "home"
     },
@@ -433,6 +442,7 @@
       "pageId": "article-claude-codex-usable-collaboration"
     }
   ],
+  "fields": [],
   "collections": [
     {
       "id": "home.selectedWork",
@@ -440,14 +450,50 @@
       "path": "selectedWork",
       "scope": "page",
       "pageId": "home",
-      "itemIdentity": "index",
-      "allowedOperations": ["create", "update", "delete"],
+      "fragmentId": "489909b4-df12-4aed-bb7a-090486b37071",
+      "itemIdentity": "stable-id",
+      "itemIdentityPath": "$id",
+      "itemLabelPath": "name",
+      "allowedOperations": ["add", "update", "move", "remove", "restore"],
+      "constraints": { "minItems": 0, "maxItems": 24 },
+      "createTemplate": {
+        "name": "New project",
+        "role": "Role",
+        "description": "Project description",
+        "href": "https://example.com",
+        "accent": "coral"
+      },
       "fields": [
-        { "id": "name", "label": "Name", "kind": "text", "path": "name" },
-        { "id": "role", "label": "Role", "kind": "text", "path": "role" },
-        { "id": "description", "label": "Description", "kind": "text", "path": "description" },
-        { "id": "href", "label": "Link", "kind": "link", "path": "href" },
-        { "id": "accent", "label": "Accent", "kind": "text", "path": "accent" }
+        { "id": "name", "label": "Name", "kind": "text", "path": "name", "required": true },
+        { "id": "role", "label": "Role", "kind": "text", "path": "role", "required": true },
+        {
+          "id": "description",
+          "label": "Description",
+          "kind": "text",
+          "path": "description",
+          "required": true
+        },
+        {
+          "id": "href",
+          "label": "Link",
+          "kind": "link",
+          "path": "href",
+          "required": true,
+          "validation": "safe-href"
+        },
+        {
+          "id": "accent",
+          "label": "Accent",
+          "kind": "enum",
+          "path": "accent",
+          "required": true,
+          "options": [
+            { "label": "Coral", "value": "coral" },
+            { "label": "Blue", "value": "blue" },
+            { "label": "Green", "value": "green" },
+            { "label": "Yellow", "value": "yellow" }
+          ]
+        }
       ]
     },
     {
@@ -457,9 +503,15 @@
       "scope": "page",
       "pageId": "article-ai-strategy-needs-a-living-memory",
       "fragmentId": "65c5a13a-a2f6-442a-956c-d359d7b0b161",
-      "itemIdentity": "index",
-      "allowedOperations": ["create", "update", "delete"],
-      "fields": [{ "id": "value", "label": "Topic", "kind": "text", "path": "$value" }]
+      "itemIdentity": "stable-id",
+      "itemIdentityPath": "$id",
+      "itemLabelPath": "$value",
+      "allowedOperations": ["add", "update", "move", "remove", "restore"],
+      "constraints": { "minItems": 0, "maxItems": 12 },
+      "createTemplate": { "$value": "Topic" },
+      "fields": [
+        { "id": "value", "label": "Topic", "kind": "text", "path": "$value", "required": true }
+      ]
     },
     {
       "id": "article-why-writing-here.article.topics",
@@ -467,9 +519,16 @@
       "path": "topics",
       "scope": "page",
       "pageId": "article-why-writing-here",
-      "itemIdentity": "index",
-      "allowedOperations": ["create", "update", "delete"],
-      "fields": [{ "id": "value", "label": "Topic", "kind": "text", "path": "$value" }]
+      "fragmentId": "af227f70-be45-4554-82f4-e91e066ec175",
+      "itemIdentity": "stable-id",
+      "itemIdentityPath": "$id",
+      "itemLabelPath": "$value",
+      "allowedOperations": ["add", "update", "move", "remove", "restore"],
+      "constraints": { "minItems": 0, "maxItems": 12 },
+      "createTemplate": { "$value": "Topic" },
+      "fields": [
+        { "id": "value", "label": "Topic", "kind": "text", "path": "$value", "required": true }
+      ]
     },
     {
       "id": "article-claude-codex-usable-collaboration.article.topics",
@@ -477,9 +536,16 @@
       "path": "topics",
       "scope": "page",
       "pageId": "article-claude-codex-usable-collaboration",
-      "itemIdentity": "index",
-      "allowedOperations": ["create", "update", "delete"],
-      "fields": [{ "id": "value", "label": "Topic", "kind": "text", "path": "$value" }]
+      "fragmentId": "35f1b219-5901-474b-ae16-28a8d541bf34",
+      "itemIdentity": "stable-id",
+      "itemIdentityPath": "$id",
+      "itemLabelPath": "$value",
+      "allowedOperations": ["add", "update", "move", "remove", "restore"],
+      "constraints": { "minItems": 0, "maxItems": 12 },
+      "createTemplate": { "$value": "Topic" },
+      "fields": [
+        { "id": "value", "label": "Topic", "kind": "text", "path": "$value", "required": true }
+      ]
     }
   ]
 }

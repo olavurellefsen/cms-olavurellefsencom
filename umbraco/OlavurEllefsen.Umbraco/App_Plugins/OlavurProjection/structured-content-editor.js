@@ -23,8 +23,15 @@ import {
 } from "./native-article-document.js";
 import {
   applyNativeHomeValues,
+  nativeHomeIdentityState,
   nativeHomeFingerprint,
+  SELECTED_WORK_KEY_MODE,
 } from "./native-home-document.js";
+import {
+  legacyScalarValues,
+  COLLECTION_IDENTITY_CONTRACT,
+  mergeLegacyScalarValues,
+} from "./collection-compatibility.js";
 import { requestFederatedCmsSession } from "./backoffice-request.js";
 
 const BRIDGE_MESSAGE = "olavur-usable-bridge";
@@ -210,6 +217,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
   #nativeBodyBaseline;
   #nativeArticleBaseline;
   #nativeHomeBaseline;
+  #nativeHomeIdentityBaseline;
   #federating = false;
 
   constructor() {
@@ -1351,7 +1359,7 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
   }
 
   #renderTopics(content) {
-    const topics = Array.isArray(content.topics) ? content.topics : [];
+    const topics = legacyScalarValues(content.topics);
     return html`
       <label class="field field-wide topics">
         <span>Topics</span>
@@ -1362,10 +1370,14 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
           @input=${(event) =>
             this.#update(
               "topics",
-              event.target.value
-                .split(",")
-                .map((topic) => topic.trim())
-                .filter(Boolean),
+              mergeLegacyScalarValues(
+                content.topics,
+                event.target.value
+                  .split(",")
+                  .map((topic) => topic.trim())
+                  .filter(Boolean),
+                { identityContract: COLLECTION_IDENTITY_CONTRACT.stableId },
+              ),
             )}
         ></uui-input>
         <small>Separate topics with commas.</small>
@@ -1523,7 +1535,11 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
     const fingerprint = nativeArticleFingerprint(values);
     if (fingerprint === this.#nativeArticleBaseline) return;
     this.#nativeArticleBaseline = fingerprint;
-    const next = applyNativeArticleValues(this._working, values);
+    const next = applyNativeArticleValues(
+      this._working,
+      values,
+      COLLECTION_IDENTITY_CONTRACT.stableId,
+    );
     if (!same(next, this._working)) {
       this.#commitWorking(next);
       this._nativeBodyState = "changed";
@@ -1534,10 +1550,22 @@ export default class OlavurStructuredContentEditor extends UmbLitElement {
 
   #receiveNativeHomeValues(values) {
     if (!this._working || contentKind(this._working) !== "home") return;
-    const fingerprint = nativeHomeFingerprint(values);
+    const mode = values.find((entry) => entry.alias === "selectedWorkProjectionMode")?.value === "managed-v2"
+      ? SELECTED_WORK_KEY_MODE.managedV2
+      : SELECTED_WORK_KEY_MODE.legacyShadow;
+    const fingerprint = `${mode}:${nativeHomeFingerprint(values)}`;
     if (fingerprint === this.#nativeHomeBaseline) return;
+    if (this.#nativeHomeIdentityBaseline === undefined) {
+      this.#nativeHomeIdentityBaseline = nativeHomeIdentityState(values);
+    }
     this.#nativeHomeBaseline = fingerprint;
-    const next = applyNativeHomeValues(this._working, values);
+    const next = applyNativeHomeValues(
+      this._working,
+      values,
+      mode,
+      COLLECTION_IDENTITY_CONTRACT.stableId,
+      this.#nativeHomeIdentityBaseline,
+    );
     if (!same(next, this._working)) {
       this.#commitWorking(next);
       this._nativeBodyState = "changed";

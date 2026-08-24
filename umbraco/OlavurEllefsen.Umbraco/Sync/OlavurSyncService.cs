@@ -22,6 +22,7 @@ public sealed class OlavurSyncService(
     IShortStringHelper shortStringHelper,
     ArticleRichTextAdapter articleRichText,
     SelectedWorkBlockAdapter selectedWork,
+    UsableProjectionClient usable,
     ProjectionWriteGuard writeGuard)
 {
     internal const string DocumentTypeAlias = "olavurSyncedDocument";
@@ -34,6 +35,7 @@ public sealed class OlavurSyncService(
     internal const string PublishedPayloadAlias = "publishedPayloadJson";
     internal const string DraftRevisionAlias = "usableDraftRevisionId";
     internal const string SelectedWorkAlias = "selectedWorkBlocks";
+    internal const string SelectedWorkModeAlias = "selectedWorkProjectionMode";
     internal const string BodyBlocksAlias = "articleBodyBlocks";
     internal const string ArticleTitleAlias = "articleTitle";
     internal const string ArticleSummaryAlias = "articleSummary";
@@ -42,6 +44,7 @@ public sealed class OlavurSyncService(
     internal const string SourceAlias = "syncSource";
     internal const string SourceHashAlias = "syncSourceHash";
     internal const string StructuredEditorUiAlias = "Olavur.PropertyEditorUi.StructuredContent";
+    internal const string HiddenManagedEditorUiAlias = "Olavur.PropertyEditorUi.HiddenManagedValue";
 
     public SiteSnapshot Export()
     {
@@ -102,6 +105,9 @@ public sealed class OlavurSyncService(
             throw new InvalidOperationException("A Usable canonical binding is required for projection refreshes.");
 
         DocumentProjectionSchema projectionSchema = await EnsureDocumentTypesAsync();
+        SelectedWorkProjectionKeyMode selectedWorkMode = await usable.GetSelectedWorkProjectionKeyModeAsync(
+            SelectedWorkBlockAdapter.SchemaPlanFingerprint,
+            CancellationToken.None);
         Dictionary<string, IContent> existing = Documents().ToDictionary(DocumentKey, StringComparer.Ordinal);
         HashSet<string> incomingKeys = new(StringComparer.Ordinal);
         int created = 0;
@@ -177,15 +183,23 @@ public sealed class OlavurSyncService(
                 document.SetValue(ArticleTitleAlias, canonicalContent["title"]?.GetValue<string>() ?? name);
                 document.SetValue(ArticleSummaryAlias, canonicalContent["summary"]?.GetValue<string>() ?? string.Empty);
                 document.SetValue(ArticleBodyAlias, articleRichText.Project(canonicalContent, projectionSchema.MediaElementKey));
-                document.SetValue(ArticleTopicsAlias, canonicalContent["topics"]?.ToJsonString() ?? "[]");
+                document.SetValue(
+                    ArticleTopicsAlias,
+                    CollectionCompatibilityCodec.LegacyScalarArray(canonicalContent["topics"]).ToJsonString());
             }
             else if (isHome)
             {
                 document.SetValue(PublishedPayloadAlias, payload.ToJsonString(JsonOptions));
                 document.SetValue(DraftRevisionAlias, null);
                 document.SetValue(
+                    SelectedWorkModeAlias,
+                    selectedWorkMode == SelectedWorkProjectionKeyMode.ManagedV2 ? "managed-v2" : "legacy-shadow");
+                document.SetValue(
                     SelectedWorkAlias,
-                    selectedWork.Project(canonicalContent, projectionSchema.SelectedWorkElementKey));
+                    selectedWork.Project(
+                        canonicalContent,
+                        projectionSchema.SelectedWorkElementKey,
+                        selectedWorkMode));
             }
             document.SetValue(SourceAlias, CanonicalSource(canonical.WorkspaceId, fragmentId));
             document.SetValue(SourceHashAlias, Hash(canonicalContent));
@@ -441,10 +455,12 @@ public sealed class OlavurSyncService(
         IDataType textBox = (await dataTypeService.GetByEditorAliasAsync("Umbraco.TextBox")).First();
         IDataType textArea = (await dataTypeService.GetByEditorAliasAsync("Umbraco.TextArea")).First();
         IDataType structuredContent = await EnsureStructuredContentDataTypeAsync();
+        IDataType hiddenManagedValue = await EnsureHiddenManagedValueDataTypeAsync();
         var properties = new (string Alias, string Name, IDataType DataType, bool Mandatory)[]
         {
             (SelectedWorkAlias, "Selected work", selectedWorkDataType, false),
             (PayloadAlias, "Home content and Usable publishing", structuredContent, true),
+            (SelectedWorkModeAlias, "Selected Work writer phase", hiddenManagedValue, true),
             (KindAlias, "Sync kind", textBox, true),
             (PageIdAlias, "Page ID", textBox, true),
             (PathAlias, "Public path", textBox, true),
@@ -772,6 +788,7 @@ public sealed class OlavurSyncService(
     {
         IDataType textBox = (await dataTypeService.GetByEditorAliasAsync("Umbraco.TextBox")).First();
         IDataType textArea = (await dataTypeService.GetByEditorAliasAsync("Umbraco.TextArea")).First();
+        IDataType hiddenManagedValue = await EnsureHiddenManagedValueDataTypeAsync();
         IContentType element = await EnsureElementTypeAsync(
             SelectedWorkBlockAdapter.ElementAlias,
             "Selected work item",
@@ -782,6 +799,7 @@ public sealed class OlavurSyncService(
                 ("workDescription", "Description", textArea, true),
                 ("workHref", "Link", textBox, true),
                 ("workAccent", "Accent (coral, blue, green, or yellow)", textBox, true),
+                ("workCanonicalId", "Managed identity", hiddenManagedValue, false),
             ]);
 
         const string dataTypeName = "Olavur selected work";
@@ -789,6 +807,11 @@ public sealed class OlavurSyncService(
             .FirstOrDefault(candidate => candidate.Name == dataTypeName);
         BlockListConfiguration configuration = new()
         {
+            ValidationLimit = new BlockListConfiguration.NumberRange
+            {
+                Min = SelectedWorkBlockAdapter.MinItems,
+                Max = SelectedWorkBlockAdapter.MaxItems,
+            },
             Blocks =
             [
                 new BlockListConfiguration.BlockConfiguration
@@ -816,7 +839,9 @@ public sealed class OlavurSyncService(
         }
         else if (dataType.ConfigurationObject is not BlockListConfiguration current ||
                  current.Blocks.Select(x => x.ContentElementTypeKey)
-                     .SequenceEqual(configuration.Blocks.Select(x => x.ContentElementTypeKey)) is false)
+                     .SequenceEqual(configuration.Blocks.Select(x => x.ContentElementTypeKey)) is false ||
+                 current.ValidationLimit?.Min != configuration.ValidationLimit.Min ||
+                 current.ValidationLimit?.Max != configuration.ValidationLimit.Max)
         {
             dataType.ConfigurationData = configurationData;
             await dataTypeService.UpdateAsync(dataType, global::Umbraco.Cms.Core.Constants.Security.SuperUserKey);
@@ -970,6 +995,22 @@ public sealed class OlavurSyncService(
             ?? throw new InvalidOperationException("Could not create the structured content data type.");
     }
 
+    private async Task<IDataType> EnsureHiddenManagedValueDataTypeAsync()
+    {
+        IDataType? existing = (await dataTypeService.GetByEditorUiAlias(HiddenManagedEditorUiAlias)).FirstOrDefault();
+        if (existing is not null) return existing;
+
+        IDataType label = (await dataTypeService.GetByEditorAliasAsync("Umbraco.Label")).First();
+        DataType dataType = new(label.Editor, configurationEditorJsonSerializer, -1)
+        {
+            Name = "Olavur hidden managed value",
+            EditorUiAlias = HiddenManagedEditorUiAlias,
+        };
+        await dataTypeService.CreateAsync(dataType, global::Umbraco.Cms.Core.Constants.Security.SuperUserKey);
+        return (await dataTypeService.GetByEditorUiAlias(HiddenManagedEditorUiAlias)).FirstOrDefault()
+            ?? throw new InvalidOperationException("Could not create the hidden managed value data type.");
+    }
+
     private List<IContent> Documents()
     {
         List<IContent> documents = [];
@@ -986,15 +1027,15 @@ public sealed class OlavurSyncService(
 
     private static ContentTypePropertyTypeModel Property(
         string alias, string name, Guid dataTypeKey, Guid containerKey, int sortOrder, bool mandatory = false) => new()
-    {
-        Key = Guid.NewGuid(),
-        Alias = alias,
-        Name = name,
-        DataTypeKey = dataTypeKey,
-        ContainerKey = containerKey,
-        SortOrder = sortOrder,
-        Validation = new PropertyTypeValidation { Mandatory = mandatory },
-    };
+        {
+            Key = Guid.NewGuid(),
+            Alias = alias,
+            Name = name,
+            DataTypeKey = dataTypeKey,
+            ContainerKey = containerKey,
+            SortOrder = sortOrder,
+            Validation = new PropertyTypeValidation { Mandatory = mandatory },
+        };
 
     internal static string DocumentKey(IContent content) => $"{Value(content, KindAlias)}:{Value(content, PageIdAlias)}";
     internal static string Value(IContent content, string alias) => content.GetValue<string>(alias) ?? string.Empty;

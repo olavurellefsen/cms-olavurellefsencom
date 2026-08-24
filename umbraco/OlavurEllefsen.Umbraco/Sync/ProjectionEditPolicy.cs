@@ -78,6 +78,7 @@ internal static class ProjectionEditPolicy
         "heroImage.alt",
         "topics",
         "topics.*",
+        "topics.*.$value",
     ];
 
     public static IReadOnlyList<string> DisallowedChanges(
@@ -94,11 +95,106 @@ internal static class ProjectionEditPolicy
                     candidate["type"]?.GetValue<string>() == "article"
                     ? ArticlePaths
                     : [];
-        return ChangedPaths(current, candidate)
+        JsonObject comparableCurrent = current.DeepClone().AsObject();
+        JsonObject comparableCandidate = candidate.DeepClone().AsObject();
+        IEnumerable<string> stableCollectionChanges = pageId == "home"
+            ? StableCollectionChanges(current, candidate, "selectedWork")
+            : current["type"]?.GetValue<string>() == "article" &&
+              candidate["type"]?.GetValue<string>() == "article"
+                ? StableCollectionChanges(current, candidate, "topics")
+                : [];
+        if (pageId == "home")
+        {
+            comparableCurrent.Remove("selectedWork");
+            comparableCandidate.Remove("selectedWork");
+        }
+        if (current["type"]?.GetValue<string>() == "article" &&
+            candidate["type"]?.GetValue<string>() == "article")
+        {
+            comparableCurrent.Remove("topics");
+            comparableCandidate.Remove("topics");
+        }
+        return stableCollectionChanges
+            .Concat(ChangedPaths(comparableCurrent, comparableCandidate))
             .Where(path => !allowed.Any(pattern => Matches(pattern, path)))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToList();
+    }
+
+    private static IEnumerable<string> StableCollectionChanges(
+        JsonObject current,
+        JsonObject candidate,
+        string path)
+    {
+        if (current[path] is not JsonArray currentValues ||
+            candidate[path] is not JsonArray candidateValues)
+        {
+            foreach (string changed in ChangedPaths(current[path], candidate[path], path))
+                yield return changed;
+            yield break;
+        }
+        List<JsonObject> currentItems = currentValues.OfType<JsonObject>().ToList();
+        List<JsonObject> candidateItems = candidateValues.OfType<JsonObject>().ToList();
+        if (currentItems.Count != currentValues.Count || candidateItems.Count != candidateValues.Count)
+        {
+            foreach (string changed in ChangedPaths(currentValues, candidateValues, path))
+                yield return changed;
+            yield break;
+        }
+
+        if (!TryItemsById(currentItems, out Dictionary<string, JsonObject> currentById))
+        {
+            foreach (string changed in ChangedPaths(currentValues, candidateValues, path))
+                yield return changed;
+            yield break;
+        }
+        if (!TryItemsById(candidateItems, out Dictionary<string, JsonObject> candidateById))
+        {
+            yield return $"{path}.*.$id";
+            yield break;
+        }
+
+        List<JsonObject> removed = currentById
+            .Where(entry => !candidateById.ContainsKey(entry.Key))
+            .Select(entry => entry.Value)
+            .ToList();
+        List<JsonObject> added = candidateById
+            .Where(entry => !currentById.ContainsKey(entry.Key))
+            .Select(entry => entry.Value)
+            .ToList();
+        if (removed.Any(oldItem => added.Any(newItem => SameValueExceptIdentity(oldItem, newItem))))
+            yield return $"{path}.*.$id";
+
+        if (removed.Count > 0 || added.Count > 0) yield return path;
+        foreach ((string identity, JsonObject currentItem) in currentById)
+        {
+            if (!candidateById.TryGetValue(identity, out JsonObject? candidateItem)) continue;
+            foreach (string changed in ChangedPaths(currentItem, candidateItem, $"{path}.*"))
+                yield return changed;
+        }
+    }
+
+    private static bool TryItemsById(
+        IEnumerable<JsonObject> items,
+        out Dictionary<string, JsonObject> result)
+    {
+        result = new Dictionary<string, JsonObject>(StringComparer.OrdinalIgnoreCase);
+        foreach (JsonObject item in items)
+        {
+            string? identity = item["$id"]?.GetValue<string>();
+            if (!Guid.TryParse(identity, out _) || !result.TryAdd(identity, item)) return false;
+        }
+        return true;
+    }
+
+    private static bool SameValueExceptIdentity(JsonObject current, JsonObject candidate)
+    {
+        JsonObject comparableCurrent = current.DeepClone().AsObject();
+        JsonObject comparableCandidate = candidate.DeepClone().AsObject();
+        comparableCurrent.Remove("$id");
+        comparableCandidate.Remove("$id");
+        return JsonNode.DeepEquals(comparableCurrent, comparableCandidate);
     }
 
     private static IEnumerable<string> ChangedPaths(JsonNode? current, JsonNode? candidate, string path = "")

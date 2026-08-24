@@ -1,3 +1,5 @@
+import { legacyContentView } from "@/lib/cms/collection-compatibility";
+import manifest from "../../../cms/manifest.json";
 import { type GlobalContent, type Page, siteContentSchema } from "./schema";
 
 export type UmbracoSiteSnapshot = {
@@ -23,7 +25,19 @@ export async function fetchUmbracoSiteSnapshot(
         : { next: { revalidate: 60, tags: ["umbraco-site-content"] } }),
     });
     if (!response.ok) return null;
-    const parsed = siteContentSchema.safeParse(await response.json());
+    const raw = (await response.json()) as { global?: unknown; pages?: unknown[] };
+    const compatible = {
+      ...raw,
+      pages: (raw.pages || []).map((page) => {
+        if (!page || typeof page !== "object") return page;
+        const record = page as Record<string, unknown>;
+        return {
+          ...record,
+          content: legacyContentView(record.content, manifest.collections, String(record.id || "")),
+        };
+      }),
+    };
+    const parsed = siteContentSchema.safeParse(compatible);
     if (!parsed.success) {
       if (process.env.NODE_ENV === "development") {
         console.warn(

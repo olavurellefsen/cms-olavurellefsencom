@@ -16,7 +16,6 @@ export function GET() {
   return Response.json(
     {
       ...manifest,
-      site: siteBinding.siteId,
       siteId: siteBinding.siteId,
       workspaceId: siteBinding.workspaceId,
       pages: fallbackSite.pages.map((page, order) => ({
