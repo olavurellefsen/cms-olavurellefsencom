@@ -40,6 +40,10 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import TurndownService from "turndown";
 import { articleRegionId, articleRegions } from "@/lib/cms/article-regions";
 import type { CmsPageReference } from "@/lib/cms/binding";
+import {
+  requiresStableCollectionCommands,
+  stableCollectionItemKey,
+} from "@/lib/cms/collection-compatibility";
 import { articleBodyFromMarkdown, articleMarkdownFromBody } from "@/lib/content/article-body";
 import {
   type ArticleMediaAlignment,
@@ -77,6 +81,7 @@ type CmsRegion = {
 type CmsCollection = {
   fragmentId?: string;
   id: string;
+  itemIdentity?: string;
   label?: string;
   pageId?: string;
   path: string;
@@ -122,6 +127,7 @@ type CmsChange = {
 type CmsDirtyValue = string | Array<Record<string, unknown>> | ArticleBody;
 
 type WorkItem = {
+  $id?: string;
   accent: "coral" | "blue" | "green" | "yellow";
   description: string;
   href: string;
@@ -433,8 +439,9 @@ export function CmsEditor() {
         const savedDraft = window.localStorage.getItem(draftKeyRef.current);
         if (savedDraft) {
           const parsedDraft = JSON.parse(savedDraft) as Record<string, CmsDirtyValue>;
-          setDirty(parsedDraft);
-          setSaveStatus(Object.keys(parsedDraft).length ? "changed" : "published");
+          const safeDraft = discardLegacyStableCollectionDrafts(parsedDraft, nextManifest);
+          setDirty(safeDraft);
+          setSaveStatus(Object.keys(safeDraft).length ? "changed" : "published");
         } else {
           setDirty({});
           setSaveStatus("published");
@@ -471,6 +478,13 @@ export function CmsEditor() {
         .map(([regionId, value]) => {
           const region = registry[regionId];
           if (!region?.fragmentId || !region.path) return null;
+          if (
+            manifest?.collections?.some(
+              (collection) =>
+                collection.id === regionId && requiresStableCollectionCommands(collection),
+            )
+          )
+            return null;
           return {
             kind: "fragment" as const,
             targetId: region.fragmentId,
@@ -479,7 +493,7 @@ export function CmsEditor() {
           };
         })
         .filter((change): change is CmsChange => Boolean(change)),
-    [dirty, registry],
+    [dirty, manifest?.collections, registry],
   );
 
   const saveDraft = useCallback(async () => {
@@ -533,6 +547,10 @@ export function CmsEditor() {
     const workLocation = workItemLocation(regionId, region?.path);
     const workCollection = selectedWorkCollection();
     if (workLocation && workCollection?.fragmentId && typeof value === "string") {
+      if (requiresStableCollectionCommands(workCollection)) {
+        setError(stableSelectedWorkReadOnlyMessage);
+        return;
+      }
       setDirty((current) => {
         const items = workItemsFromState(
           workCollection,
@@ -723,6 +741,20 @@ export function CmsEditor() {
         continue;
       }
 
+      if (
+        region.path?.startsWith("selectedWork.") &&
+        workCollection &&
+        requiresStableCollectionCommands(workCollection)
+      ) {
+        element.dataset.cmsEditable = "read-only";
+        element.removeAttribute("contenteditable");
+        element.setAttribute(
+          "title",
+          "Manage this stable collection in the native Umbraco Block List editor.",
+        );
+        continue;
+      }
+
       element.dataset.cmsEditable = "text";
       element.contentEditable = "true";
       element.spellcheck = true;
@@ -812,7 +844,7 @@ export function CmsEditor() {
       }
     }
 
-    if (workCollection && pageId === "home") {
+    if (workCollection && pageId === "home" && !requiresStableCollectionCommands(workCollection)) {
       cleanups.push(
         installCurrentWorkControls(doc, workItems, {
           add: () => {
@@ -1273,6 +1305,10 @@ export function CmsEditor() {
       setError("The Current work collection is not available in this CMS manifest.");
       return;
     }
+    if (requiresStableCollectionCommands(collection)) {
+      setError(stableSelectedWorkReadOnlyMessage);
+      return;
+    }
     registerRegion({
       id: collection.id,
       kind: "text",
@@ -1524,6 +1560,10 @@ export function CmsEditor() {
       ["siteDescription"].includes(region.path),
   );
   const workItems = currentWorkItems();
+  const selectedWork = selectedWorkCollection();
+  const workCollectionReadOnly = selectedWork
+    ? requiresStableCollectionCommands(selectedWork)
+    : false;
   const writingPages = managedPages.filter((page) => page.path.startsWith("/writing/"));
   const activePage = managedPages.find((page) => page.id === pageId);
   const isUnpublishedPage = activePage?.status === "draft";
@@ -1739,6 +1779,7 @@ export function CmsEditor() {
                     <button
                       type="button"
                       className="cms-collection-add"
+                      disabled={workCollectionReadOnly}
                       onClick={() => {
                         setError("");
                         setNewWorkOpen(true);
@@ -1761,7 +1802,7 @@ export function CmsEditor() {
                           <button
                             type="button"
                             onClick={() => moveWorkItem(index, -1, false)}
-                            disabled={index === 0}
+                            disabled={workCollectionReadOnly || index === 0}
                             aria-label={`Move ${item.name} up`}
                             title="Move up"
                           >
@@ -1770,7 +1811,7 @@ export function CmsEditor() {
                           <button
                             type="button"
                             onClick={() => moveWorkItem(index, 1, false)}
-                            disabled={index === workItems.length - 1}
+                            disabled={workCollectionReadOnly || index === workItems.length - 1}
                             aria-label={`Move ${item.name} down`}
                             title="Move down"
                           >
@@ -1779,6 +1820,7 @@ export function CmsEditor() {
                           <button
                             type="button"
                             className="cms-work-list-actions__remove"
+                            disabled={workCollectionReadOnly}
                             onClick={() => removeWorkItem(index)}
                             aria-label={`Remove ${item.name} from Current work`}
                             title="Remove from Current work"
@@ -1790,8 +1832,9 @@ export function CmsEditor() {
                     ))}
                   </ol>
                   <p className="cms-content-manager__note">
-                    Draft additions and removals appear in the preview immediately. Publish to make
-                    them public; use Discard draft to undo.
+                    {workCollectionReadOnly
+                      ? "Selected work uses stable-ID commands and is read-only here. Manage it in the native Umbraco Block List editor."
+                      : "Draft additions and removals appear in the preview immediately. Publish to make them public; use Discard draft to undo."}
                   </p>
                 </section>
 
@@ -3059,6 +3102,7 @@ function normalizeWorkItems(value: unknown): WorkItem[] {
       return [];
     return [
       {
+        ...(typeof record.$id === "string" ? { $id: record.$id } : {}),
         name: record.name,
         role: record.role,
         description: record.description,
@@ -3071,6 +3115,8 @@ function normalizeWorkItems(value: unknown): WorkItem[] {
 
 function workItemRenderKey(items: WorkItem[], index: number): string {
   const item = items[index];
+  const stableKey = stableCollectionItemKey(item, "$id");
+  if (stableKey) return stableKey;
   const identity = [item.accent, item.name, item.role, item.description, item.href].join("\u001f");
   const occurrence = items
     .slice(0, index)
@@ -3085,6 +3131,20 @@ function workItemRenderKey(items: WorkItem[], index: number): string {
         ].join("\u001f") === identity,
     ).length;
   return `${identity}\u001f${occurrence}`;
+}
+
+const stableSelectedWorkReadOnlyMessage =
+  "Selected work is read-only here because this editor cannot emit item-ID-bound collection commands. Manage it in the native Umbraco Block List editor.";
+
+function discardLegacyStableCollectionDrafts(
+  draft: Record<string, CmsDirtyValue>,
+  manifest: CmsManifest,
+): Record<string, CmsDirtyValue> {
+  const next = { ...draft };
+  for (const collection of manifest.collections || []) {
+    if (requiresStableCollectionCommands(collection)) delete next[collection.id];
+  }
+  return next;
 }
 
 function workItemLocation(regionId: string, path?: string) {

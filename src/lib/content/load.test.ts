@@ -135,7 +135,15 @@ describe("CMS page visibility", () => {
       }
       if (url.includes("/api/memory-fragments?")) return Response.json({ fragments: [] });
       if (url.endsWith(`/api/memory-fragments/${fragmentId}`)) {
-        return Response.json({ fragment: { id: fragmentId, content: JSON.stringify(article) } });
+        return Response.json({
+          fragment: {
+            id: fragmentId,
+            content: JSON.stringify({
+              ...article,
+              topics: [{ $id: "11111111-1111-4111-8111-111111111111", $value: "CMS" }],
+            }),
+          },
+        });
       }
       return new Response(null, { status: 404 });
     });

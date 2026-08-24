@@ -18,6 +18,7 @@ public sealed class UsableProjectionSavingHandler(
         OlavurSyncService.KindAlias,
         OlavurSyncService.PageIdAlias,
         OlavurSyncService.PathAlias,
+        OlavurSyncService.SelectedWorkModeAlias,
         OlavurSyncService.SourceAlias,
         OlavurSyncService.SourceHashAlias,
     ];
@@ -71,6 +72,20 @@ public sealed class UsableProjectionSavingHandler(
             bool nativeHome = candidate.ContentType.Alias == OlavurSyncService.HomeDocumentTypeAlias;
             if (nativeArticle || nativeHome)
             {
+                if (nativeHome)
+                {
+                    SelectedWorkProjectionKeyMode storedMode = SelectedWorkMode(candidate);
+                    await usable.RequireSelectedWorkProjectionKeyModeAsync(
+                        storedMode,
+                        SelectedWorkBlockAdapter.SchemaPlanFingerprint,
+                        cancellationToken);
+                    if (storedMode == SelectedWorkProjectionKeyMode.LegacyShadow &&
+                        !selectedWork.PreservesLegacyIdentityState(
+                            OlavurSyncService.Value(persisted, OlavurSyncService.SelectedWorkAlias),
+                            OlavurSyncService.Value(candidate, OlavurSyncService.SelectedWorkAlias)))
+                        throw new UsableProjectionException(
+                            "Stable Selected Work identity metadata changed or is missing. Refresh the projection before saving.");
+                }
                 bool nativeMatches = nativeArticle
                     ? ArticleNativeMatches(candidate, content)
                     : HomeNativeMatches(candidate, content);
@@ -127,7 +142,7 @@ public sealed class UsableProjectionSavingHandler(
                 content,
                 OlavurSyncService.Value(candidate, OlavurSyncService.ArticleBodyAlias))) return false;
 
-        JsonArray expectedTopics = content["topics"] as JsonArray ?? [];
+        JsonArray expectedTopics = CollectionCompatibilityCodec.LegacyScalarArray(content["topics"]);
         JsonArray actualTopics;
         try
         {
@@ -137,10 +152,19 @@ public sealed class UsableProjectionSavingHandler(
         return JsonNode.DeepEquals(expectedTopics, actualTopics);
     }
 
-    private bool HomeNativeMatches(IContent candidate, JsonObject content) =>
-        selectedWork.MatchesCanonical(
+    private bool HomeNativeMatches(IContent candidate, JsonObject content)
+    {
+        SelectedWorkProjectionKeyMode mode = SelectedWorkMode(candidate);
+        return selectedWork.MatchesCanonical(
             content,
-            OlavurSyncService.Value(candidate, OlavurSyncService.SelectedWorkAlias));
+            OlavurSyncService.Value(candidate, OlavurSyncService.SelectedWorkAlias),
+            mode);
+    }
+
+    private static SelectedWorkProjectionKeyMode SelectedWorkMode(IContent content) =>
+        OlavurSyncService.Value(content, OlavurSyncService.SelectedWorkModeAlias) == "managed-v2"
+            ? SelectedWorkProjectionKeyMode.ManagedV2
+            : SelectedWorkProjectionKeyMode.LegacyShadow;
 
     private static JsonObject PublishedContent(JsonObject payload) =>
         payload["content"] as JsonObject ?? new JsonObject();

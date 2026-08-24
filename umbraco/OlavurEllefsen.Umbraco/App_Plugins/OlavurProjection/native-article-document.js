@@ -1,11 +1,19 @@
-export function applyNativeArticleValues(payload, values) {
+import { mergeLegacyScalarValues } from "./collection-compatibility.js";
+
+export function applyNativeArticleValues(payload, values, identityContract) {
   if (!payload || !Array.isArray(values)) return payload;
   const next = structuredClone(payload);
   const content = next.content || next;
   const byAlias = new Map(values.map((entry) => [entry.alias, entry.value]));
   if (byAlias.has("articleTitle")) content.title = String(byAlias.get("articleTitle") || "");
   if (byAlias.has("articleSummary")) content.summary = String(byAlias.get("articleSummary") || "");
-  if (byAlias.has("articleTopics")) content.topics = normalizeTopics(byAlias.get("articleTopics"));
+  if (byAlias.has("articleTopics")) {
+    content.topics = mergeLegacyScalarValues(
+      content.topics,
+      normalizeTopics(byAlias.get("articleTopics")),
+      { identityContract },
+    );
+  }
   if (byAlias.has("articleBody")) {
     const body = canonicalBodyFromRichText(byAlias.get("articleBody"));
     if (body) content.bodyBlocks = body;

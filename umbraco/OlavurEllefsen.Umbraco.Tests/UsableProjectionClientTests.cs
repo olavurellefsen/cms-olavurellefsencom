@@ -173,6 +173,249 @@ public sealed class UsableProjectionClientTests
             ProjectionEditPolicy.DisallowedChanges("page", "article-runtime", current, candidate));
     }
 
+    [Fact]
+    public void EditPolicyMatchesStableCollectionsByIdInsteadOfOrdinal()
+    {
+        JsonObject currentHome = JsonNode.Parse("""
+        {
+          "type": "home",
+          "selectedWork": [
+            { "$id": "11111111-1111-4111-8111-111111111111", "name": "One" },
+            { "$id": "22222222-2222-4222-8222-222222222222", "name": "Two" }
+          ]
+        }
+        """)!.AsObject();
+        JsonObject reorderedHome = currentHome.DeepClone().AsObject();
+        JsonArray reorderedWork = reorderedHome["selectedWork"]!.AsArray();
+        JsonNode? first = reorderedWork[0];
+        reorderedWork.RemoveAt(0);
+        reorderedWork.Add(first);
+        reorderedWork[1]!["name"] = "One edited";
+
+        Assert.Empty(ProjectionEditPolicy.DisallowedChanges(
+            "page", "home", currentHome, reorderedHome));
+
+        JsonObject replacedIdentity = reorderedHome.DeepClone().AsObject();
+        replacedIdentity["selectedWork"]![0]!["$id"] =
+            "33333333-3333-4333-8333-333333333333";
+        Assert.Contains("selectedWork.*.$id", ProjectionEditPolicy.DisallowedChanges(
+            "page", "home", reorderedHome, replacedIdentity));
+
+        JsonObject currentArticle = JsonNode.Parse("""
+        {
+          "type": "article",
+          "topics": [
+            { "$id": "11111111-1111-4111-8111-111111111111", "$value": "Usable" },
+            { "$id": "22222222-2222-4222-8222-222222222222", "$value": "Umbraco" }
+          ]
+        }
+        """)!.AsObject();
+        JsonObject editedArticle = currentArticle.DeepClone().AsObject();
+        editedArticle["topics"]![0]!["$value"] = "CMS";
+        Assert.Empty(ProjectionEditPolicy.DisallowedChanges(
+            "page", "article-one", currentArticle, editedArticle));
+    }
+
+    [Fact]
+    public void EditPolicyRejectsIdentityTamperingAlongsideAnAddition()
+    {
+        JsonObject current = JsonNode.Parse("""
+        {
+          "type": "home",
+          "selectedWork": [
+            { "$id": "11111111-1111-4111-8111-111111111111", "name": "One" },
+            { "$id": "22222222-2222-4222-8222-222222222222", "name": "Two" },
+            { "$id": "33333333-3333-4333-8333-333333333333", "name": "Three" }
+          ]
+        }
+        """)!.AsObject();
+
+        JsonObject addAndTamper = current.DeepClone().AsObject();
+        addAndTamper["selectedWork"]![0]!["$id"] =
+            "44444444-4444-4444-8444-444444444444";
+        addAndTamper["selectedWork"]!.AsArray().Add(JsonNode.Parse(
+            """{ "$id": "55555555-5555-4555-8555-555555555555", "name": "Five" }"""));
+        Assert.Contains("selectedWork.*.$id", ProjectionEditPolicy.DisallowedChanges(
+            "page", "home", current, addAndTamper));
+    }
+
+    [Fact]
+    public void EditPolicyRejectsIdentityTamperingAlongsideARemoval()
+    {
+        JsonObject current = JsonNode.Parse("""
+        {
+          "type": "home",
+          "selectedWork": [
+            { "$id": "11111111-1111-4111-8111-111111111111", "name": "One" },
+            { "$id": "22222222-2222-4222-8222-222222222222", "name": "Two" },
+            { "$id": "33333333-3333-4333-8333-333333333333", "name": "Three" }
+          ]
+        }
+        """)!.AsObject();
+        JsonObject removeAndTamper = current.DeepClone().AsObject();
+        removeAndTamper["selectedWork"]!.AsArray().RemoveAt(2);
+        removeAndTamper["selectedWork"]![0]!["$id"] =
+            "44444444-4444-4444-8444-444444444444";
+        Assert.Contains("selectedWork.*.$id", ProjectionEditPolicy.DisallowedChanges(
+            "page", "home", current, removeAndTamper));
+    }
+
+    [Fact]
+    public void EditPolicyAllowsRemovingAndAddingDistinctStableItemsInOneSave()
+    {
+        JsonObject current = JsonNode.Parse("""
+        {
+          "type": "home",
+          "selectedWork": [
+            { "$id": "11111111-1111-4111-8111-111111111111", "name": "One" },
+            { "$id": "22222222-2222-4222-8222-222222222222", "name": "Two" }
+          ]
+        }
+        """)!.AsObject();
+        JsonObject candidate = JsonNode.Parse("""
+        {
+          "type": "home",
+          "selectedWork": [
+            { "$id": "22222222-2222-4222-8222-222222222222", "name": "Two edited" },
+            { "$id": "33333333-3333-4333-8333-333333333333", "name": "Three" }
+          ]
+        }
+        """)!.AsObject();
+
+        Assert.Empty(ProjectionEditPolicy.DisallowedChanges("page", "home", current, candidate));
+    }
+
+    [Fact]
+    public async Task CutoverUsesManagedIdsOnlyForExactDurableStableWriterTuple()
+    {
+        HttpRequestMessage? captured = null;
+        StubHandler handler = new(request =>
+        {
+            captured = request;
+            return Task.FromResult(Json(HttpStatusCode.OK, """
+            {
+              "siteId": "42782a7c-6918-4e84-b08b-cc3c859621ab",
+              "collectionId": "home.selectedWork",
+              "phase": "stable",
+              "writer": "canonical-workflow"
+            }
+            """));
+        });
+        UsableProjectionClient client = CreateCutoverClient(handler);
+
+        SelectedWorkProjectionKeyMode result = await client.GetSelectedWorkProjectionKeyModeAsync(
+            SelectedWorkBlockAdapter.SchemaPlanFingerprint,
+            CancellationToken.None);
+
+        Assert.Equal(SelectedWorkProjectionKeyMode.ManagedV2, result);
+        Assert.Equal(HttpMethod.Get, captured?.Method);
+        Assert.Null(captured?.Headers.Authorization);
+        Assert.Equal(
+            "ucmsa1.test-adapter-credential",
+            captured?.Headers.GetValues("x-usable-cms-adapter-credential").Single());
+        Assert.Equal(
+            SelectedWorkBlockAdapter.SchemaPlanFingerprint,
+            captured?.Headers.GetValues("x-usable-cms-schema-plan-fingerprint").Single());
+        Assert.EndsWith(
+            "/api/adapters/umbraco/v1/sites/42782a7c-6918-4e84-b08b-cc3c859621ab/collection-cutovers/home.selectedWork",
+            captured?.RequestUri?.AbsoluteUri);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.ServiceUnavailable, "{}")]
+    [InlineData(HttpStatusCode.OK, "{\"phase\":\"stable\",\"writer\":\"canonical-workflow\"}")]
+    [InlineData(HttpStatusCode.OK, "{\"siteId\":\"42782a7c-6918-4e84-b08b-cc3c859621ab\",\"collectionId\":\"home.selectedWork\",\"phase\":\"compatibility\",\"writer\":\"legacy-bridge\"}")]
+    public async Task CutoverFailsClosedUnlessTheCompleteTupleIsStable(
+        HttpStatusCode status,
+        string response)
+    {
+        UsableProjectionClient client = CreateCutoverClient(new StubHandler(_ =>
+            Task.FromResult(Json(status, response))));
+
+        SelectedWorkProjectionKeyMode result = await client.GetSelectedWorkProjectionKeyModeAsync(
+            SelectedWorkBlockAdapter.SchemaPlanFingerprint,
+            CancellationToken.None);
+
+        Assert.Equal(SelectedWorkProjectionKeyMode.LegacyShadow, result);
+    }
+
+    [Fact]
+    public async Task AuthoritativeSaveAcceptsOnlyAFreshlyVerifiedMatchingCompatibilityPhase()
+    {
+        UsableProjectionClient client = CreateCutoverClient(new StubHandler(_ =>
+            Task.FromResult(Json(HttpStatusCode.OK, """
+            {
+              "siteId": "42782a7c-6918-4e84-b08b-cc3c859621ab",
+              "collectionId": "home.selectedWork",
+              "phase": "compatibility",
+              "writer": "legacy-bridge"
+            }
+            """))));
+
+        await client.RequireSelectedWorkProjectionKeyModeAsync(
+            SelectedWorkProjectionKeyMode.LegacyShadow,
+            SelectedWorkBlockAdapter.SchemaPlanFingerprint,
+            CancellationToken.None);
+        UsableProjectionException changed = await Assert.ThrowsAsync<UsableProjectionException>(() =>
+            client.RequireSelectedWorkProjectionKeyModeAsync(
+                SelectedWorkProjectionKeyMode.ManagedV2,
+                SelectedWorkBlockAdapter.SchemaPlanFingerprint,
+                CancellationToken.None));
+
+        Assert.Contains("phase changed", changed.Message);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.ServiceUnavailable, "{}")]
+    [InlineData(HttpStatusCode.OK, "{\"phase\":\"compatibility\",\"writer\":\"legacy-bridge\"}")]
+    public async Task AuthoritativeSaveRejectsWhenDurablePhaseCannotBeVerified(
+        HttpStatusCode status,
+        string response)
+    {
+        UsableProjectionClient client = CreateCutoverClient(new StubHandler(_ =>
+            Task.FromResult(Json(status, response))));
+
+        UsableProjectionException unavailable = await Assert.ThrowsAsync<UsableProjectionException>(() =>
+            client.RequireSelectedWorkProjectionKeyModeAsync(
+                SelectedWorkProjectionKeyMode.LegacyShadow,
+                SelectedWorkBlockAdapter.SchemaPlanFingerprint,
+                CancellationToken.None));
+
+        Assert.Contains("could not be verified", unavailable.Message);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("ucms1.public-browser-credential")]
+    [InlineData("ucmsa1.")]
+    public async Task CutoverNeverReusesAnUnprovisionedOrPublicSiteCredential(
+        string? adapterCredential)
+    {
+        int requests = 0;
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["UsableIdentity:CmsOrigin"] = "https://cms.usable.test",
+                ["UsableIdentity:SiteId"] = "42782a7c-6918-4e84-b08b-cc3c859621ab",
+                ["UsableIdentity:SiteCredential"] = "ucms1.public-browser-credential",
+                ["UsableProjection:AdapterCredential"] = adapterCredential,
+            })
+            .Build();
+        UsableProjectionClient client = new(new HttpClient(new StubHandler(_ =>
+        {
+            requests++;
+            return Task.FromResult(Json(HttpStatusCode.OK, "{}"));
+        })), configuration);
+
+        SelectedWorkProjectionKeyMode result = await client.GetSelectedWorkProjectionKeyModeAsync(
+            SelectedWorkBlockAdapter.SchemaPlanFingerprint,
+            CancellationToken.None);
+
+        Assert.Equal(SelectedWorkProjectionKeyMode.LegacyShadow, result);
+        Assert.Equal(0, requests);
+    }
+
     private static UsableProjectionClient CreateClient(HttpMessageHandler handler)
     {
         IConfiguration configuration = new ConfigurationBuilder()
@@ -180,6 +423,20 @@ public sealed class UsableProjectionClientTests
             {
                 ["UsableProjection:ApiBaseUrl"] = "https://usable.test",
                 ["UsableProjection:ServerToken"] = "test-token",
+            })
+            .Build();
+        return new UsableProjectionClient(new HttpClient(handler), configuration);
+    }
+
+    private static UsableProjectionClient CreateCutoverClient(HttpMessageHandler handler)
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["UsableIdentity:CmsOrigin"] = "https://cms.usable.test",
+                ["UsableIdentity:SiteId"] = "42782a7c-6918-4e84-b08b-cc3c859621ab",
+                ["UsableIdentity:SiteCredential"] = "ucms1.public-browser-credential",
+                ["UsableProjection:AdapterCredential"] = "ucmsa1.test-adapter-credential",
             })
             .Build();
         return new UsableProjectionClient(new HttpClient(handler), configuration);

@@ -1,5 +1,7 @@
 import { cache } from "react";
 import { type CmsPageReference, siteBinding } from "@/lib/cms/binding";
+import { legacyContentView } from "@/lib/cms/collection-compatibility";
+import manifest from "../../../cms/manifest.json";
 import { fallbackPage, fallbackSite } from "./fallback";
 import {
   articleContentSchema,
@@ -177,7 +179,9 @@ async function fetchWorkspacePageReferences(noStore = false): Promise<CmsPageRef
         const rawContent = fragment.content
           ? parseFragmentContent(fragment.content)
           : await fetchFragment(fragmentId, noStore);
-        const content = articleContentSchema.safeParse(rawContent);
+        const content = articleContentSchema.safeParse(
+          legacyContentView(rawContent, manifest.collections, pageId),
+        );
         if (content.success) {
           path = `/writing/${content.data.slug}`;
           title = content.data.title;
@@ -310,7 +314,9 @@ async function loadPageContent(
   if (!reference && !fallback) return null;
   const fragmentId = reference?.fragmentId || siteBinding.pageFragmentIds[pageId];
   const live = await fetchFragment(fragmentId, noStore);
-  const content = pageContentSchema.safeParse(live);
+  const content = pageContentSchema.safeParse(
+    legacyContentView(live, manifest.collections, pageId),
+  );
   if (content.success) {
     return {
       value: {
