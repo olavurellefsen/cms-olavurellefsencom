@@ -62,7 +62,10 @@ test("Usable collaboration article renders its product hero", async ({ page }) =
 test("public pages load Usable Web Analytics for the canonical hostname", async ({ page }) => {
   await page.goto("/");
   const analytics = page.locator("#usable-web-analytics");
-  await expect(analytics).toHaveAttribute("src", "https://web-analytics.usable.dev/js/uwa.js");
+  await expect(analytics).toHaveAttribute(
+    "src",
+    "https://web-analytics.usable.dev/js/v1.0.0/uwa.js",
+  );
   await expect(analytics).toHaveAttribute("data-domain", "www.olavurellefsen.com");
 });
 
