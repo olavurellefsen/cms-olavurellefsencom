@@ -68,7 +68,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <CmsEmbed />
         <Script
           id="usable-web-analytics"
-          src="https://web-analytics.usable.dev/js/uwa.js"
+          src="https://web-analytics.usable.dev/js/v1.0.0/uwa.js"
+          integrity="sha384-N3dVUWCLArSsxOtVuEe2Du1YTUvRsuSpSWXVItMO7jnl7JQQ7M+2OuXY/mpccqtD"
+          crossOrigin="anonymous"
           strategy="afterInteractive"
           data-domain="www.olavurellefsen.com"
         />
